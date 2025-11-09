@@ -124,5 +124,5 @@
 [8]: Deep Metric Learning for Near-Duplicate Video
 Retrieval Leveraging Efficient Semantic
 Feature Extraction. IEEEAccess, 2024, Digital Object Identifier 10.1109/ACCESS.2024.3411101.  
-[9]: Near duplicate text detection using graph depiction. IEEEAccess, 2016,  Digital Object Identifier 10.1109/IISA.2016.7785368
+[9]: Near duplicate text detection using graph depiction. IEEEAccess, 2016,  Digital Object Identifier 10.1109/IISA.2016.7785368  
 [10]: py-image-dedup. https://github.com/markusressel/py-image-dedup?tab=readme-ov-file
