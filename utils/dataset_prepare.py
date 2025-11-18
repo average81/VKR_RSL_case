@@ -11,7 +11,7 @@ import argparse
 
 logging.basicConfig(level=logging.INFO)
 
-def image_prepare(img, blur_prob = 0.2, noise_prob = 0.2):
+def image_prepare(img, blur_prob = 0.2, noise_prob = 0.2, rotation_prob = 0.2):
     if img is not None:
         # Размытие
         kernel_size = 1
@@ -29,6 +29,22 @@ def image_prepare(img, blur_prob = 0.2, noise_prob = 0.2):
             noise_d += 1
         noise = np.random.normal(- noise_d // 2, noise_d // 2, img.shape)
         img = cv2.add(img, noise, dtype=cv2.CV_8U)
+        # Поворот
+        if random.random() >= rotation_prob:
+            angle = random.randint(-5, 5)
+            rows, cols = img.shape[:2]
+            M = cv2.getRotationMatrix2D((cols / 2, rows / 2), angle, 1)
+            #вычисление нового размера изображения после поворота
+            w = cols * abs(np.cos(np.deg2rad(angle))) + rows * abs(np.sin(np.deg2rad(angle)))
+            h = rows * abs(np.cos(np.deg2rad(angle))) + cols * abs(np.sin(np.deg2rad(angle)))
+            M[0, 2] += (w - cols) / 2
+            M[1, 2] += (h - rows) / 2
+            #матрица нового изображения
+            if len(img.shape) == 3:
+                img = cv2.warpAffine(img, M, (int(w), int(h)))
+            else:
+                img = cv2.warpAffine(img, M, (int(w), int(h)), borderValue=255)
+
     return img
 
 def dataset_prepare(dataset_path, dataset_save_path = "prep_dataset/", blur_prob = 0.2, noise_prob = 0.2):
@@ -39,8 +55,8 @@ def dataset_prepare(dataset_path, dataset_save_path = "prep_dataset/", blur_prob
         img = cv2.imread(os.path.join(dataset_path, filename))
         if img is not None:
             doubles = 1
-            image_prepare(img, blur_prob, noise_prob)
-            cv2.imwrite(os.path.join(dataset_save_path, f"{filename[:-4]}.jpg"), img)
+            img2 = image_prepare(img, blur_prob, noise_prob)
+            cv2.imwrite(os.path.join(dataset_save_path, f"{filename[:-4]}.jpg"), img2)
             while True:
                 if random.random() >= double_prob:
                     break
