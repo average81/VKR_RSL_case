@@ -83,7 +83,7 @@ def open_dataset(path):
     #Список файлов в папке
     for file in os.listdir(path):
         #Если файл является изображением
-        if file.endswith(['.jpg', '.png', '.jpeg']):
+        if file.endswith(('.jpg', '.png', '.jpeg')):
             #Добавление изображения в список
             images.append(file)
             #Добавление разметки в список
