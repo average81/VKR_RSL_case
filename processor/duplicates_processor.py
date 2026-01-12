@@ -11,7 +11,7 @@ class FeatureExtractorSIFT:
         kp, des = self.sift.detectAndCompute(grey, None)
         return kp,des
 
-class Matcher:
+class BFMatcher:
     def match(self, kp1, features1, kp2, features2, threshold=0.75):
         # Implement feature matching
         bf = cv2.BFMatcher()
@@ -24,8 +24,8 @@ class Matcher:
         # Сравнение изображений
         matchesMask = None
         if len(good) > 10:
-            src_pts = np.float32([kp1[m.queryIdx] for m in good]).reshape(-1, 1, 2)
-            dst_pts = np.float32([kp2[m.trainIdx] for m in good]).reshape(-1, 1, 2)
+            src_pts = np.float32([kp1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+            dst_pts = np.float32([kp2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
             M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
             matchesMask = mask.ravel().tolist()
         return matchesMask
@@ -33,8 +33,19 @@ class Matcher:
 
 class DuplicatesProcessor:
     def __init__(self):
-        self.feature_extractor = FeatureExtractorSIFT
-        self.matcher = Matcher
+        self.feature_extractor = FeatureExtractorSIFT()
+        self.matcher = BFMatcher()
 
-    def compare(self,img1,img2):
-        return self.matcher.match(self.feature_extractor.extract_features(img1),self.feature_extractor.extract_features(img2))
+    def compare(self,img1,img2, threshold=0.75):
+        if img1 is None or img2 is None:
+            print("Error: One or both images are None")
+            return None
+        kp1,features1 = self.feature_extractor.extract_features(img1)
+        kp2,features2 = self.feature_extractor.extract_features(img2)
+        matches = self.matcher.match(kp1,features1,kp2,features2,threshold)
+        if matches is not None:
+            if len(matches) > 10:
+                return sum(matches) / len(matches)
+            else:
+                return 0
+        return 0

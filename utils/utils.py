@@ -7,13 +7,6 @@ def open_yaml(file):
     with open(file, 'r') as f:
         return yaml.safe_load(f)
 
-
-#Ф-я векторизации изображения
-def sift_vectorize(img):
-    sift = cv2.SIFT_create()
-    kp, des = sift.detectAndCompute(img, None)
-    return kp,des
-
 def xml_to_dict(xml_path):
     """Читает XML-файл в формате Pascal VOC и возвращает словарь."""
     if not os.path.exists(xml_path):

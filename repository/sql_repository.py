@@ -73,7 +73,8 @@ class SQLProcessedRepository(ProcessedRepository):
 
     def get_proc_images(self):
         proc_images = self.session.query(Processed_sql).all()
-        return [Processed_table(x.timestamp, x.user, x.filename, x.path, x.duplicates, x.main_double, x.enhanced_path) for x in proc_images]
+        return [{"id": x.id, "timestamp": x.timestamp, "user": x.user, "filename": x.filename, "path": x.path,
+                 "duplicates": x.duplicates, "main_double": x.main_double, "enhanced_path":  x.enhanced_path} for x in proc_images]
 
     def del_proc_images(self, start:int, end:int):
         first = self.session.query(func.min(Processed_sql.id)).scalar()

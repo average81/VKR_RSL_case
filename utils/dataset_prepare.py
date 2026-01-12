@@ -190,14 +190,14 @@ def dataset_prepare(dataset_path, dataset_save_path = "prep_dataset/", blur_prob
                 img2, pascal_voc = defects_image(img2)
                 # Устанавливаем параметры в словаре Pascal VOC
                 pascal_voc["annotation"]["folder"] = dataset_save_path
-                pascal_voc["annotation"]["filename"] = f"{img_num}_{doubles}.jpg"
+                pascal_voc["annotation"]["filename"] = f"roll{img_num}-{doubles}.jpg"
                 pascal_voc["annotation"]["size"]["width"] = img2.shape[1]
                 pascal_voc["annotation"]["size"]["height"] = img2.shape[0]
                 pascal_voc["annotation"]["size"]["depth"] = img2.shape[2] if len(img2.shape) == 3 else 1
 
-                cv2.imwrite(os.path.join(dataset_save_path, f"{img_num}_{doubles}.jpg"), img2)
+                cv2.imwrite(os.path.join(dataset_save_path, f"roll{img_num}-{doubles}.jpg"), img2)
                 # Сохраняем XML
-                xml_path = os.path.join(dataset_save_path, f"{img_num}_{doubles}.xml")
+                xml_path = os.path.join(dataset_save_path, f"roll{img_num}-{doubles}.xml")
                 dict_to_xml(pascal_voc, xml_path)
 
                 if random.random() >= double_prob:

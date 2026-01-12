@@ -7,6 +7,9 @@ import os
 import pandas as pd
 from repository.sql_repository import SQLProcessedRepository, Processed_table, create_sqlengine
 import datetime
+from processor.duplicates_processor import DuplicatesProcessor
+import cv2
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +19,8 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, default="output", help="Output directory to save processed images.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
     parser.add_argument("--db_path", type=str, default="processed_images.db", help="Path to the SQLite database.")
+    parser.add_argument("--cthreshold", type=float, default=0.7, help="Threshold for duplicate detection.")
+    parser.add_argument("--match_threshold", type=float, default=0.75, help="Threshold for matching.")
     args = parser.parse_args()
     if args.verbose:
         logging.basicConfig(level=logging.INFO)
@@ -38,7 +43,12 @@ if __name__ == "__main__":
     max_len = input_images['filename'].apply(len).max()
     input_images['filename_max'] = input_images['filename']
     for i in input_images.index:
-        input_images.loc[i, 'filename_max'] = "0"*(max_len-len(input_images.loc[i, 'filename'])) + input_images.loc[i, 'filename']
+        # Извлекаем номер из названия файла
+        num_match = re.search(r"(\d+)", input_images.loc[i, 'filename'])
+        prefix = input_images.loc[i, 'filename'][:num_match.start()]
+        postfix = input_images.loc[i, 'filename'][num_match.end():]
+        num = num_match.group()
+        input_images.loc[i, 'filename_max'] = prefix + "0"*(max_len-len(input_images.loc[i, 'filename'])) + num + postfix
     input_images = input_images.sort_values(by='filename_max').reset_index(drop=True)
     input_images = input_images.drop(columns=['filename_max'])
 
@@ -46,22 +56,63 @@ if __name__ == "__main__":
     logger.info("Searching for processed images...")
     processed_repository = SQLProcessedRepository(sqlengine)
     processed_images = processed_repository.get_proc_images()
-    processed_images = pd.DataFrame(processed_images, columns=['filename'])
-    processed_images = processed_images.sort_values(by='filename').reset_index(drop=True)
-    input_images = input_images[~input_images['filename'].isin(processed_images['filename'])]
+    processed_images = pd.DataFrame(processed_images)
+    if len(processed_images) > 0:
+        processed_images = processed_images.sort_values(by='filename').reset_index(drop=True)
+        input_images = input_images[~input_images['filename'].isin(processed_images['filename'])]
     logger.info("Processing images...")
+    start_idx = 0   # Индекс последней записи в таблице обработанных изображений (с него начинаем сравнение)
     # Последняя запись в таблице обработанных изображений
-    cur_idx = 0
     if len(processed_images) > 0:
         last_processed_image = processed_images.iloc[-1]['filename']
         last_processed_image_path = processed_images.iloc[-1]['path']
+        start_idx = processed_images.index[-1]
     else:
+        # Создаем пустую таблицу
+        processed_images = pd.DataFrame(columns=['filename', 'path', 'timestamp', 'user', 'duplicates', 'main_double', 'enhanced_path'])
+        # duplicates преобразуем в int
+        processed_images['duplicates'] = processed_images['duplicates'].astype(int)
+        # Добавляем строку с первой записью
+        processed_images.loc[0] = [input_images.loc[0, 'filename'], args.input_dir, datetime.datetime.now(), os.getlogin(),
+                                   0, input_images.loc[0, 'filename'], ""]
         # Добавляем строку с первой записью
         last_processed_image = input_images.iloc[0]['filename']
         last_processed_image_path = args.input_dir
         # Добавляем в базу данных
         processed_repository.add_proc_image(Processed_table(filename=input_images.loc[0, 'filename'], path=args.input_dir,
-                                                            timestamp = datetime.datetime.now(), user = os.getlogin(), duplicates = 0,
-                                                            main_double = input_images.loc[0, 'filename'], enhanced_path = ""))
+                                                            timestamp = processed_images.iloc[0].timestamp, user = os.getlogin(),
+                                                            duplicates = 0, main_double = input_images.loc[0, 'filename'],
+                                                            enhanced_path = ""))
+        input_images = input_images.drop(0).reset_index(drop=True)
+
+    last_img = cv2.imread(last_processed_image_path + "/" + last_processed_image)
+    # Создаем объект сравнения
+    Dprocessor = DuplicatesProcessor()
+    for i in input_images.index:
+        img = cv2.imread(args.input_dir + "/" + input_images.loc[i, 'filename'])
+        score = Dprocessor.compare(last_img, img, args.match_threshold)
+        logger.info(f"Image {input_images.loc[i, 'filename']} has a score of {score} for comparison with {last_processed_image}.")
+        if score > args.cthreshold:
+            # Добавляем запись в таблицу
+
+            processed_images.loc[len(processed_images)] = [input_images.loc[i, 'filename'], args.input_dir, datetime.datetime.now(),
+                                                           os.getlogin(), processed_images.iloc[-1].duplicates + 1,
+                                                           processed_images.iloc[-processed_images.iloc[-1].duplicates - 1]['filename'], ""]
+            print(processed_images.iloc[-1].duplicates, type(processed_images.iloc[-1].duplicates))
+            # Добавляем в базу данных
+            processed_repository.add_proc_image(Processed_table(filename=input_images.loc[i, 'filename'], path=args.input_dir,
+                                                                timestamp = processed_images.iloc[-1].timestamp, user = os.getlogin(), duplicates = int(processed_images.iloc[-1].duplicates),
+                                                                main_double = processed_images.iloc[-processed_images.iloc[-1].duplicates - 1]['filename'], enhanced_path = ""))
+            logger.info(f"Image {input_images.loc[i, 'filename']} is a duplicate of {last_processed_image}.")
+        else:
+            # Добавляем запись в таблицу
+            processed_images.loc[len(processed_images)] = [input_images.loc[i, 'filename'], args.input_dir, datetime.datetime.now(),
+                                                           os.getlogin(), 0,
+                                                           processed_images.iloc[-processed_images.iloc[-1].duplicates - 1]['filename'], ""]
+            processed_repository.add_proc_image(Processed_table(filename=input_images.loc[i, 'filename'], path=args.input_dir,
+                                                                timestamp = processed_images.iloc[-1].timestamp, user = os.getlogin(), duplicates = 0,
+                                                                main_double = input_images.loc[i, 'filename'], enhanced_path = ""))
+        last_img = img
+        last_processed_image = input_images.loc[i, 'filename']
 
     exit()
