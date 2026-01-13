@@ -67,9 +67,11 @@ class SQLProcessedRepository(ProcessedRepository):
         self.session.add(new_proc_image)
         try:
             self.session.commit()
+            return new_proc_image.id
         except Exception as e:
             self.session.rollback()
             print(e)
+        return None
 
     def get_proc_images(self):
         proc_images = self.session.query(Processed_sql).all()
@@ -87,4 +89,25 @@ class SQLProcessedRepository(ProcessedRepository):
                                                  Processed_sql.id <= end).delete(synchronize_session=False)
         self.session.commit()
         return True
+    def update_proc_image(self, image_id: int, updates: dict) -> bool:
+        """
+        Обновляет запись в таблице processed_images по id.
+        :param image_id: ID записи
+        :param updates: Словарь с полями и новыми значениями, например:
+                        {"filename": "new_name.jpg", "duplicates": 5}
+        :return: True, если обновлено, иначе False
+        """
 
+
+        try:
+            query = self.session.query(Processed_sql).filter(Processed_sql.id == image_id)
+            if query.count() == 0:
+                print(f"Запись с ID {image_id} не найдена.")
+                return False  # Нет записи с таким ID
+            query.update(updates, synchronize_session=False)
+            self.session.commit()
+            return True
+        except Exception as e:
+            self.session.rollback()
+            print(f"Ошибка при обновлении записи {image_id}: {e}")
+            return False
