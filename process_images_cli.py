@@ -14,14 +14,21 @@ import re
 
 logger = logging.getLogger(__name__)
 
+default_config = {
+"db_path": "processed_images.db",
+"match_threshold": 0.75,
+"duplicate_threshold": 0.7}
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("input_dir", type=str, help="Input directory containing images to process.")
     parser.add_argument("--output_dir", type=str, default="output", help="Output directory to save processed images.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
-    parser.add_argument("--db_path", type=str, default="processed_images.db", help="Path to the SQLite database.")
-    parser.add_argument("--cthreshold", type=float, default=0.7, help="Threshold for duplicate detection.")
-    parser.add_argument("--match_threshold", type=float, default=0.75, help="Threshold for matching.")
+    parser.add_argument("-m", "--metrics", action="store_true", help="Enable metrics logging.")
+    parser.add_argument("--config_path", type=str, default="config.yml", help="Path to the configuration file.")
+    #parser.add_argument("--db_path", type=str, default="processed_images.db", help="Path to the SQLite database.")
+    #parser.add_argument("--cthreshold", type=float, default=0.7, help="Threshold for duplicate detection.")
+    #parser.add_argument("--match_threshold", type=float, default=0.75, help="Threshold for matching.")
     args = parser.parse_args()
     if args.verbose:
         logging.basicConfig(level=logging.INFO)
@@ -38,7 +45,13 @@ if __name__ == "__main__":
         os.makedirs(args.output_dir + "/duplicates/")
         logger.info(f"Created output directory {args.output_dir}/duplicates/.")
     logger.info("Connecting to or creating database...")
-    sqlengine = create_sqlengine(args.db_path)
+    # Читаем или создаем конфигурацию
+    if os.path.exists(args.config_path):
+        config = utils.open_yaml(args.config_path)
+    else:
+        config = default_config
+        utils.save_yaml(args.config_path, config)
+    sqlengine = create_sqlengine(config["db_path"])
     logger.info("Getting list of images...")
     input_images,__ = utils.open_dataset(args.input_dir)
     input_images = pd.DataFrame(input_images, columns=['filename'])
@@ -100,11 +113,14 @@ if __name__ == "__main__":
     # Создаем объект сравнения
     Dprocessor = DuplicatesProcessor()
     duplicate_series_name = ''
+    metrics = pd.DataFrame(columns=['image', 'score'])
     for i in input_images.index:
         img = cv2.imread(args.input_dir + "/" + input_images.loc[i, 'filename'])
-        score = Dprocessor.compare(last_img, img, args.match_threshold)
+        score = Dprocessor.compare(last_img, img, config["match_threshold"])
         logger.info(f"Image {input_images.loc[i, 'filename']} has a score of {score} for comparison with {last_processed_image}.")
-        if score > args.cthreshold:
+        if args.metrics:
+            metrics.loc[len(metrics)] = [input_images.loc[i, 'filename'], score]
+        if score > config["duplicate_threshold"]:
             # Добавляем запись в таблицу
 
             if processed_images.iloc[-1].duplicates == 0:
@@ -154,4 +170,8 @@ if __name__ == "__main__":
         last_img = img
         last_processed_image = input_images.loc[i, 'filename']
 
+    if args.metrics:
+        # Сохраняем метрики в файл
+        metrics.to_csv(f"{args.output_dir}/metrics.csv", index=False)
+    logger.info("Image processing completed.")
     exit()

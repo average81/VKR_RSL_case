@@ -2,10 +2,18 @@ import yaml
 import cv2
 import xml.etree.ElementTree as ET
 import os
+import pandas as pd
+from sklearn.metrics import roc_curve
+
 #Открытие файла настроек в  yaml
 def open_yaml(file):
     with open(file, 'r') as f:
         return yaml.safe_load(f)
+
+#Сохранение yaml
+def save_yaml(file, data):
+    with open(file, 'w') as f:
+        yaml.dump(data, f)
 
 def xml_to_dict(xml_path):
     """Читает XML-файл в формате Pascal VOC и возвращает словарь."""
@@ -83,3 +91,34 @@ def open_dataset(path):
             name = file.split('.')[0]
             defects.append(xml_to_dict(os.path.join(path, name + '.xml')))
     return images, defects
+
+def get_roc_auc_curve_data(df: pd.DataFrame, prob_col: str = 'score', true_label_col: str = 'true_dupl'):
+    """
+    Возвращает данные для построения ROC AUC кривой.
+
+    :param df: pandas DataFrame с вероятностями и истинными метками
+    :param prob_col: название столбца с вероятностью того, что изображение - дубликат предыдущего
+    :param true_label_col: название столбца с истинными метками дубликатов(0 или 1)
+    :return: кортеж (fpr, tpr, thresholds), где:
+             fpr - false positive rate
+             tpr - true positive rate
+             thresholds - пороги вероятностей
+    """
+    # Проверка наличия колонок
+    if prob_col not in df.columns:
+        raise ValueError(f"Столбец '{prob_col}' не найден в DataFrame")
+    if true_label_col not in df.columns:
+        raise ValueError(f"Столбец '{true_label_col}' не найден в DataFrame")
+
+    # Извлечение значений
+    y_true = df[true_label_col].values
+    y_score = df[prob_col].values
+
+    # Проверка значений
+    if set(y_true) - {0, 1}:
+        raise ValueError("Истинные метки должны быть 0 или 1")
+
+    # Вычисление ROC кривой
+    fpr, tpr, thresholds = roc_curve(y_true, y_score, drop_intermediate=True)
+
+    return fpr, tpr, thresholds
