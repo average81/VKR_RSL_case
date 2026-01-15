@@ -11,6 +11,7 @@ import datetime
 from processor.duplicates_processor import DuplicatesProcessor
 import cv2
 import re
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -110,13 +111,23 @@ if __name__ == "__main__":
             logger.info(f"Copied {processed_images.loc[0, 'filename']} to {args.output_dir}.")
 
     last_img = cv2.imread(last_processed_image_path + "/" + last_processed_image)
+
     # Создаем объект сравнения
-    Dprocessor = DuplicatesProcessor()
+    if "matcher" in config.keys():
+        Dprocessor = DuplicatesProcessor(config["matcher"])
+        logger.info(f"Using {config['matcher']} matcher.")
+    else:
+        Dprocessor = DuplicatesProcessor()
+        logger.info("Using BF matcher.")
     duplicate_series_name = ''
     metrics = pd.DataFrame(columns=['image', 'score'])
+    start_time = time.time()
     for i in input_images.index:
         img = cv2.imread(args.input_dir + "/" + input_images.loc[i, 'filename'])
-        score = Dprocessor.compare(last_img, img, config["match_threshold"])
+        if Dprocessor.last_kp is None:
+            score = Dprocessor.compare(last_img,img, config["match_threshold"])
+        else:
+            score = Dprocessor.compare_w_last(img, config["match_threshold"])
         logger.info(f"Image {input_images.loc[i, 'filename']} has a score of {score} for comparison with {last_processed_image}.")
         if args.metrics:
             metrics.loc[len(metrics)] = [input_images.loc[i, 'filename'], score]
@@ -169,7 +180,9 @@ if __name__ == "__main__":
                          os.path.join(args.output_dir, input_images.loc[i, 'filename']))
         last_img = img
         last_processed_image = input_images.loc[i, 'filename']
-
+    end_time = time.time()
+    logger.info(f"Processing time: {end_time - start_time} seconds.")
+    logger.info(f"Average time per image: {(end_time - start_time)/len(input_images)} seconds.")
     if args.metrics:
         # Сохраняем метрики в файл
         metrics.to_csv(f"{args.output_dir}/metrics.csv", index=False)
