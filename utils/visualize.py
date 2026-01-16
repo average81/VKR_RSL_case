@@ -21,8 +21,8 @@ def draw_roc_curve(fpr, tpr, thresholds):
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
         plt.title('ROC Curve')
-        if thresholds is not None:
+        """if thresholds is not None:
             for i in range(len(thresholds)):
-                plt.annotate(f'{thresholds[i]:.3f}', (fpr[i], tpr[i]), textcoords="offset points", xytext=(0,10), ha='center')
-                plt.legend()
+                plt.annotate(f'{thresholds[i]:.3f}', (fpr[i], tpr[i]), textcoords="offset points", xytext=(0,10), ha='center')"""
+        plt.legend()
         plt.show()
