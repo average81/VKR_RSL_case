@@ -1,5 +1,5 @@
 db_path: processed_images.db
 duplicate_threshold: 0.6
 match_threshold: 0.75
-matcher: FLANN
-feature_extractor: SIFT
+matcher: BF  # Доступные: BF, FLANN
+feature_extractor: ORB # Доступные: SIFT, ORB

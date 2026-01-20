@@ -128,6 +128,7 @@ if __name__ == "__main__":
     duplicate_series_name = ''
     metrics = pd.DataFrame(columns=['image', 'score'])
     start_time = time.time()
+    local_duplicates = []   # тут будет список текущей серии дубликатов
     for i in input_images.index:
         img = cv2.imread(args.input_dir + "/" + input_images.loc[i, 'filename'])
         if Dprocessor.last_kp is None:
@@ -139,47 +140,67 @@ if __name__ == "__main__":
             metrics.loc[len(metrics)] = [input_images.loc[i, 'filename'], score]
         if score > config["duplicate_threshold"]:
             # Добавляем запись в таблицу
-
-            if processed_images.iloc[-1].duplicates == 0:
+            last_idx = processed_images.index[-1]
+            if processed_images.loc[last_idx].duplicates == 0:
                 # Это первый обнаруженный дубликат в серии
 
-                if not os.path.exists(args.output_dir + "/duplicates/" + processed_images.iloc[-1].filename.split(".")[0]):
-                    os.mkdir(args.output_dir + "/duplicates/" + processed_images.iloc[-1].filename.split(".")[0])
+                if not os.path.exists(args.output_dir + "/duplicates/" + processed_images.loc[last_idx].filename.split(".")[0]):
+                    os.mkdir(args.output_dir + "/duplicates/" + processed_images.loc[last_idx].filename.split(".")[0])
                 # Перемещаем предыдущий файл в папку дубликатов с его названием
-                shutil.move(f"{processed_images.iloc[-1].path}/{processed_images.iloc[-1].filename}", f"{args.output_dir}/"
-                          f"duplicates/{processed_images.iloc[-1].filename.split('.')[0]}/{processed_images.iloc[-1].filename}")
+                shutil.move(f"{processed_images.loc[last_idx].path}/{processed_images.loc[last_idx].filename}", f"{args.output_dir}/"
+                          f"duplicates/{processed_images.loc[last_idx].filename.split('.')[0]}/{processed_images.loc[last_idx].filename}")
                 # Изменяем адрес файла в таблице
-                processed_images.loc[processed_images.index[-1], 'path'] = os.path.join(
+                processed_images.loc[last_idx, 'path'] = os.path.join(
                     args.output_dir,
                     "duplicates",
-                    processed_images.iloc[-1].filename.split(".")[0]
+                    processed_images.loc[last_idx].filename.split(".")[0]
                 )
-
+                local_duplicates.append(last_idx)
                 # Изменяем запись в базе
-                processed_repository.update_proc_image(int(processed_images.iloc[-1].id),
-                                                       {'path': processed_images.iloc[-1].path})
-                duplicate_series_name = processed_images.iloc[-1].filename.split(".")[0]
+                processed_repository.update_proc_image(int(processed_images.loc[last_idx].id),
+                                                       {'path': processed_images.loc[last_idx].path})
+                duplicate_series_name = processed_images.loc[last_idx].filename.split(".")[0]
             # Копируем текущее изображение в папку дубликатов
             src = os.path.join(args.input_dir, input_images.loc[i, 'filename'])
             dst = os.path.join(args.output_dir, "duplicates", duplicate_series_name, input_images.loc[i, 'filename'])
             shutil.copy2(src, dst)
             dst = os.path.join(args.output_dir, "duplicates", duplicate_series_name)
-            processed_images.loc[len(processed_images)] = dict(id = 0,filename = input_images.loc[i, 'filename'], path =dst, timestamp = datetime.datetime.now(),
-                                                           user = os.getlogin(), duplicates = int(processed_images.iloc[-1].duplicates) + 1,
-                                                           main_double = processed_images.iloc[-processed_images.iloc[-1].duplicates - 1]['filename'], enhanced_path = "")
 
+            processed_images.loc[len(processed_images)] = dict(id = 0,filename = input_images.loc[i, 'filename'], path =dst, timestamp = datetime.datetime.now(),
+                                                           user = os.getlogin(), duplicates = int(processed_images.loc[last_idx].duplicates) + 1,
+                                                           main_double = processed_images.loc[last_idx]['filename'], enhanced_path = "")
+            local_duplicates.append(last_idx + 1)
             # Добавляем в базу данных
-            processed_images.loc[processed_images.index[-1], 'id'] = processed_repository.add_proc_image(Processed_table(filename=input_images.loc[i, 'filename'], path=dst,
-                                                                timestamp = processed_images.iloc[-1].timestamp, user = os.getlogin(), duplicates = int(processed_images.iloc[-1].duplicates),
-                                                                main_double = processed_images.iloc[-processed_images.iloc[-1].duplicates - 1]['filename'], enhanced_path = ""))
+            processed_images.loc[last_idx + 1, 'id'] = processed_repository.add_proc_image(Processed_table(filename=input_images.loc[i, 'filename'], path=dst,
+                                                                timestamp = processed_images.loc[last_idx + 1].timestamp, user = os.getlogin(),
+                                                                duplicates = int(processed_images.loc[last_idx + 1].duplicates),
+                                                                main_double = processed_images.loc[last_idx]['filename'], enhanced_path = ""))
             logger.info(f"Image {input_images.loc[i, 'filename']} is a duplicate of {last_processed_image}.")
         else:
+            # Проверяем, был ли найден список дубликатов
+            if len(local_duplicates) > 0:
+                local_dup_imgs = []
+                for dup in local_duplicates:
+                    img = cv2.imread(processed_images.loc[dup,'path'] + "/" + processed_images.loc[dup,'filename'])
+                    local_dup_imgs.append(img)
+                best_img_id = Dprocessor.get_best_quality_image(local_dup_imgs)
+                # копируем лучшее изображение в выходную папку
+                src = (processed_images.loc[local_duplicates[best_img_id],'path'] + "/" +
+                       processed_images.loc[local_duplicates[best_img_id],'filename'])
+
+                dst = os.path.dirname(processed_images.loc[local_duplicates[best_img_id],'path'])
+                dst = os.path.dirname(dst)
+                shutil.copy2(src, dst)
+                # Исправляем запись в таблице
+                processed_images.loc[local_duplicates[best_img_id],'path'] = dst
+            local_duplicates = []
             # Добавляем запись в таблицу
+            last_idx = processed_images.index[-1]
             processed_images.loc[len(processed_images)] = dict(id = 0,filename = input_images.loc[i, 'filename'], path=args.output_dir, timestamp = datetime.datetime.now(),
                                                            user = os.getlogin(), duplicates = 0,
-                                                           main_double = processed_images.iloc[-processed_images.iloc[-1].duplicates - 1]['filename'], enhanced_path = "")
-            processed_images.loc[processed_images.index[-1], 'id'] = processed_repository.add_proc_image(Processed_table(filename=input_images.loc[i, 'filename'], path=args.output_dir,
-                                                                timestamp = processed_images.iloc[-1].timestamp, user = os.getlogin(), duplicates = 0,
+                                                           main_double = processed_images.loc[last_idx]['filename'], enhanced_path = "")
+            processed_images.loc[last_idx + 1, 'id'] = processed_repository.add_proc_image(Processed_table(filename=input_images.loc[i, 'filename'], path=args.output_dir,
+                                                                timestamp = processed_images.loc[last_idx + 1].timestamp, user = os.getlogin(), duplicates = 0,
                                                                 main_double = input_images.loc[i, 'filename'], enhanced_path = ""))
             # Копируем в выходную папку
             shutil.copy2(os.path.join(args.input_dir, input_images.loc[i, 'filename']),
