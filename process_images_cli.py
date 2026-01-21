@@ -127,14 +127,22 @@ if __name__ == "__main__":
 
     duplicate_series_name = ''
     metrics = pd.DataFrame(columns=['image', 'score'])
+    # Метрики времени
+    total_compare_time = 0.0
+    total_quality_time = 0.0
     start_time = time.time()
     local_duplicates = []   # тут будет список текущей серии дубликатов
+    num_duplicates = 0
     for i in input_images.index:
         img = cv2.imread(args.input_dir + "/" + input_images.loc[i, 'filename'])
         if Dprocessor.last_kp is None:
+            t0 = time.time()
             score = Dprocessor.compare(last_img,img, config["match_threshold"])
+            total_compare_time += time.time() - t0
         else:
+            t0 = time.time()
             score = Dprocessor.compare_w_last(img, config["match_threshold"])
+            total_compare_time += time.time() - t0
         logger.info(f"Image {input_images.loc[i, 'filename']} has a score of {score} for comparison with {last_processed_image}.")
         if args.metrics:
             metrics.loc[len(metrics)] = [input_images.loc[i, 'filename'], score]
@@ -179,11 +187,14 @@ if __name__ == "__main__":
         else:
             # Проверяем, был ли найден список дубликатов
             if len(local_duplicates) > 0:
+                num_duplicates += len(local_duplicates)
                 local_dup_imgs = []
                 for dup in local_duplicates:
                     img = cv2.imread(processed_images.loc[dup,'path'] + "/" + processed_images.loc[dup,'filename'])
                     local_dup_imgs.append(img)
+                t0 = time.time()
                 best_img_id = Dprocessor.get_best_quality_image(local_dup_imgs)
+                total_quality_time += time.time() - t0
                 # копируем лучшее изображение в выходную папку
                 src = (processed_images.loc[local_duplicates[best_img_id],'path'] + "/" +
                        processed_images.loc[local_duplicates[best_img_id],'filename'])
@@ -210,6 +221,10 @@ if __name__ == "__main__":
     end_time = time.time()
     logger.info(f"Processing time: {end_time - start_time} seconds.")
     logger.info(f"Average time per image: {(end_time - start_time)/len(input_images)} seconds.")
+    logger.info(f"Total compare time: {total_compare_time} seconds.")
+    logger.info(f"Average time per compare: {total_compare_time/len(input_images)} seconds.")
+    logger.info(f"Total quality time: {total_quality_time} seconds.")
+    logger.info(f"Average time per quality check: {total_quality_time/num_duplicates} seconds.")
     if args.metrics:
         # Сохраняем метрики в файл
         metrics.to_csv(f"{args.output_dir}/metrics.csv", index=False)
