@@ -46,7 +46,7 @@
    
    Склонируйте репозиторий на локальный компьютер с помощью Git:
    ```
-   git clone https://github.com/username/VKR_RSL_case.git
+   git clone https://github.com/average81/VKR_RSL_case.git
    cd VKR_RSL_case
    ```
 
