@@ -4,24 +4,25 @@ import numpy as np
 class BFMatcher:
     def __init__(self, feature_extractor="SIFT"):
         self.feature_extractor = feature_extractor
-        if feature_extractor == "SIFT":
+        if feature_extractor == "SIFT" or feature_extractor=="KAZE":
             params = dict(normType = cv2.NORM_L2)
         else:
             params = dict(normType = cv2.NORM_HAMMING, crossCheck=True)
         self.bf = cv2.BFMatcher(**params)
     def match(self, kp1, features1, kp2, features2, threshold=0.75):
         # Implement feature matching
+        good = []
         if len(features1) >= 2 and len(features2) >= 2:
 
-            if self.feature_extractor == "SIFT":
+            if self.feature_extractor == "SIFT" or self.feature_extractor== 'KAZE':
                 matches = self.bf.knnMatch(features1, features2, k=2)
             else:
                 matches = self.bf.match(features1, features2)
 
             # Фильтрация признаков
-            good = []
+
             for match in matches:
-                if self.feature_extractor == "SIFT":
+                if self.feature_extractor == "SIFT" or self.feature_extractor=='KAZE':
                     if len(match) == 2:
                         m, n = match
                         if m.distance < threshold * n.distance:

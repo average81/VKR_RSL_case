@@ -1,13 +1,13 @@
 # processor/duplicates_processor.py
 
-from processor.feature_extractors import FeatureExtractorSIFT, FeatureExtractorORB
+from processor.feature_extractors import FeatureExtractorSIFT, FeatureExtractorORB, FeatureExtractorKAZE
 from processor.feature_matchers import BFMatcher, FLANNmatcher
 from processor.quality_processor import QualityProcessor
 
 
 
 matchers = {"BF": BFMatcher, "FLANN": FLANNmatcher}
-extractors = {"SIFT": FeatureExtractorSIFT, "ORB": FeatureExtractorORB}
+extractors = {"SIFT": FeatureExtractorSIFT, "ORB": FeatureExtractorORB, "KAZE": FeatureExtractorKAZE}
 
 class DuplicatesProcessor:
     def __init__(self, feature_extractor="SIFT", matcher_type="BF"):
@@ -27,7 +27,7 @@ class DuplicatesProcessor:
     def compare(self,img1,img2, threshold=0.75):
         if img1 is None or img2 is None:
             print("Error: One or both images are None")
-            return 0
+            return 0.0
         kp1,features1 = self.feature_extractor.extract_features(img1)
         kp2,features2 = self.feature_extractor.extract_features(img2)
         self.last_kp = kp2
@@ -37,8 +37,8 @@ class DuplicatesProcessor:
             if len(matches) > 10:
                 return sum(matches) / len(matches)
             else:
-                return 0
-        return 0
+                return 0.0
+        return 0.0
     def compare_w_last(self,img2,threshold=0.75):
         if self.last_kp is None or self.last_features is None:
             print("Error: No last features available")
