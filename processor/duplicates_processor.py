@@ -66,3 +66,27 @@ class DuplicatesProcessor:
             return 0
         else:
             return self.quality_processor.compare(imgs)
+
+    def compare_with_features(self, img, kp1, features1, threshold=0.75):
+        """
+        Сравнивает изображение с предоставленными ключевыми точками и дескрипторами другого изображения.
+        
+        Параметры:
+        - img: текущее изображение (numpy array)
+        - kp1: ключевые точки первого изображения
+        - features1: дескрипторы первого изображения
+        - threshold: порог фильтрации матчей
+        
+        Возвращает:
+        - Среднее значение совпадений (0.0–1.0) или 0.0 при отсутствии совпадений
+        """
+        if img is None or kp1 is None or features1 is None:
+            print("Error: Image or features are None")
+            return 0.0
+            
+        kp2, features2 = self.feature_extractor.extract_features(img)
+        matches = self.matcher.match(kp1, features1, kp2, features2, threshold)
+        
+        if matches is not None and len(matches) > 10:
+            return sum(matches) / len(matches)
+        return 0.0
