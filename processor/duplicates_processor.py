@@ -5,7 +5,6 @@ from processor.feature_matchers import BFMatcher, FLANNmatcher
 from processor.quality_processor import QualityProcessor
 
 
-
 matchers = {"BF": BFMatcher, "FLANN": FLANNmatcher}
 extractors = {"SIFT": FeatureExtractorSIFT, "ORB": FeatureExtractorORB, "KAZE": FeatureExtractorKAZE}
 
@@ -32,7 +31,8 @@ class DuplicatesProcessor:
         kp2,features2 = self.feature_extractor.extract_features(img2)
         self.last_kp = kp2
         self.last_features = features2
-        matches = self.matcher.match(kp1,features1,kp2,features2,threshold)
+        matches,good = self.matcher.match(kp1,features1,kp2,features2,threshold)
+
         if matches is not None:
             if len(matches) > 10:
                 return sum(matches) / len(matches)
@@ -52,7 +52,7 @@ class DuplicatesProcessor:
         kp2,features2 = self.feature_extractor.extract_features(img2)
         self.last_kp = kp2
         self.last_features = features2
-        matches = self.matcher.match(kp1,features1,kp2,features2,threshold)
+        matches,good = self.matcher.match(kp1,features1,kp2,features2,threshold)
         if matches is not None:
             if len(matches) > 10:
                 return sum(matches) / len(matches)
@@ -85,8 +85,9 @@ class DuplicatesProcessor:
             return 0.0
             
         kp2, features2 = self.feature_extractor.extract_features(img)
-        matches = self.matcher.match(kp1, features1, kp2, features2, threshold)
-        
+        matches,good = self.matcher.match(kp1, features1, kp2, features2, threshold)
+
+
         if matches is not None and len(matches) > 10:
             return sum(matches) / len(matches)
         return 0.0

@@ -36,7 +36,7 @@ class BFMatcher:
             dst_pts = np.float32([kp2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
             M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
             matchesMask = mask.ravel().tolist()
-        return matchesMask
+        return matchesMask, good
 
 class FLANNmatcher:
     def __init__(self, feature_extractor="SIFT"):

@@ -3,9 +3,16 @@ import cv2
 import argparse
 import yaml
 import logging
+import numpy as np
 from processor.duplicates_processor import DuplicatesProcessor
+import utils.utils as utils
 
-def main(input_folder, output_folder, logos_folder):
+default_config = {
+    "db_path": "processed_images.db",
+    "match_threshold": 0.75,
+    "duplicate_threshold": 0.7}
+
+def main(input_folder, output_folder, logos_folder, config):
     # Проверка существования папок
     if not os.path.exists(input_folder):
         raise FileNotFoundError(f"Папка входных изображений не найдена: {input_folder}")
@@ -37,14 +44,12 @@ def main(input_folder, output_folder, logos_folder):
     if not logo_images:
         logging.warning(f"Нет подходящих изображений в папке логотипов: {logos_folder}")
         return
-    
-    # Чтение конфигурации из config.yml
-    with open("config.yml", "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+
     
     feature_extractor = config.get("feature_extractor", "KAZE")
     matcher_type = config.get("matcher", "BF")
-    similarity_threshold = config.get("match_threshold", 0.7)
+    similarity_threshold = config.get("duplicate_threshold", 0.7)
+    match_threshold = config.get("match_threshold", 0.75)
     
     # Инициализация процессора дубликатов
     processor = DuplicatesProcessor(feature_extractor=feature_extractor, matcher_type=matcher_type)
@@ -57,9 +62,18 @@ def main(input_folder, output_folder, logos_folder):
     for logo_name in logo_images:
         logo_path = os.path.join(logos_folder, logo_name)
         try:
-            logo_img = cv2.imread(logo_path)
-            if logo_img is None:
-                logging.error(f"Не удалось прочитать логотип: {logo_path}")
+            # Чтение изображения логотипа с поддержкой кириллицы
+            try:
+                with open(logo_path, 'rb') as f:
+                    file_bytes = f.read()
+                np_arr = np.frombuffer(file_bytes, np.uint8)
+                logo_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+                if logo_img is None:
+                    logging.error(f"Не удалось декодировать логотип: {logo_path}")
+                    continue
+            except Exception as e:
+                logging.error(f"Ошибка при чтении логотипа {logo_path}: {e}")
                 continue
             
             # Извлечение ключевых точек и дескрипторов
@@ -79,9 +93,18 @@ def main(input_folder, output_folder, logos_folder):
         
         # Попытка чтения входного изображения
         try:
-            input_img = cv2.imread(input_img_path)
-            if input_img is None:
-                logging.error(f"Не удалось прочитать изображение: {input_img_path}")
+            # Чтение изображения с поддержкой кириллицы
+            try:
+                with open(input_img_path, 'rb') as f:
+                    file_bytes = f.read()
+                np_arr = np.frombuffer(file_bytes, np.uint8)
+                input_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                
+                if input_img is None:
+                    logging.error(f"Не удалось декодировать изображение: {input_img_path}")
+                    continue
+            except Exception as e:
+                logging.error(f"Ошибка при чтении изображения {input_img_path}: {e}")
                 continue
         except Exception as e:
             logging.error(f"Ошибка при чтении изображения {input_img_path}: {e}")
@@ -94,41 +117,48 @@ def main(input_folder, output_folder, logos_folder):
             logo_path = os.path.join(logos_folder, logo_name)
             
             try:
-                # logo_img больше не нужен для чтения, так как признаки уже извлечены
-                if logo_name not in logo_features:
-                    continue
-                
+
                 # Получение признаков из кэша
                 if logo_name not in logo_features:
                     continue
                 
                 kp1, des1 = logo_features[logo_name]
-                
+
                 # Сравнение изображения с признаками логотипа
-                similarity = processor.compare_with_features(input_img, kp1, des1)
-                
+                similarity = processor.compare_with_features(input_img, kp1, des1,match_threshold)
+
                 if similarity >= similarity_threshold:
                     found_logo = True
-                    
+                    logging.info(
+                        f"{input_img_name}, Логотип '{logo_name}' ({round(similarity * 100, 4):>6}%)"
+                    )# Найдено совпадающее название лого
                     # Если нашли новый логотип, создаем новую группу
-                    if current_group is None or current_group != logo_name:
-                        current_group = logo_name
-                        # Увеличиваем счётчик для данного логотипа
-                        logo_counters[logo_name] = logo_counters.get(logo_name, 0) + 1
-                        
-                        # Создаем имя папки группы
-                        logo_name_without_ext = os.path.splitext(logo_name)[0]
-                        group_folder_name = f"logo_{logo_name_without_ext}_{logo_counters[logo_name]}"
-                        group_folder_path = os.path.join(output_folder, group_folder_name)
-                        
-                        if not os.path.exists(group_folder_path):
-                            os.makedirs(group_folder_path)
-                            
-                        logging.info(f"Создана группа {group_folder_name} для логотипа {logo_name} (схожесть: {similarity:.3f})")
+                    current_group = logo_name
+                    # Увеличиваем счётчик для данного логотипа
+                    logo_counters[logo_name] = logo_counters.get(logo_name, 0) + 1
+
+                    # Создаем имя папки группы
+                    logo_name_without_ext = os.path.splitext(logo_name)[0]
+                    group_folder_name = f"{logo_name_without_ext}_{logo_counters[logo_name]}"
+                    group_folder_path = os.path.join(output_folder, group_folder_name)
+
+                    if not os.path.exists(group_folder_path):
+                        os.makedirs(group_folder_path)
+
+                    logging.info(f"Создана группа {group_folder_name} для логотипа {logo_name} (схожесть: {similarity:.3f})")
                     
                     # Копируем изображение в текущую группу
                     output_img_path = os.path.join(group_folder_path, input_img_name)
-                    cv2.imwrite(output_img_path, input_img)
+                    # Сохранение изображения с поддержкой кириллицы
+                    try:
+                        success, encoded_img = cv2.imencode('.png', input_img)
+                        if success:
+                            with open(output_img_path, 'wb') as f:
+                                f.write(encoded_img)
+                        else:
+                            logging.error(f"Не удалось закодировать изображение для сохранения: {output_img_path}")
+                    except Exception as e:
+                        logging.error(f"Ошибка при сохранении изображения {output_img_path}: {e}")
                     logging.info(f"  -> {input_img_name}")
                     
                     break  # Переход к следующему изображению после нахождения подходящего логотипа
@@ -141,7 +171,16 @@ def main(input_folder, output_folder, logos_folder):
         # Если мы не в группе - пропускаем изображение
         if not found_logo and current_group is not None:
             output_img_path = os.path.join(group_folder_path, input_img_name)
-            cv2.imwrite(output_img_path, input_img)
+            # Сохранение изображения с поддержкой кириллицы
+            try:
+                success, encoded_img = cv2.imencode('.png', input_img)
+                if success:
+                    with open(output_img_path, 'wb') as f:
+                        f.write(encoded_img)
+                else:
+                    logging.error(f"Не удалось закодировать изображение для сохранения: {output_img_path}")
+            except Exception as e:
+                logging.error(f"Ошибка при сохранении изображения {output_img_path}: {e}")
             logging.info(f"  -> {input_img_name} (продолжение группы)")
     
     logging.info("Обработка завершена.")
@@ -161,7 +200,13 @@ if __name__ == "__main__":
     parser.add_argument('input_folder', help='Путь к папке с входными изображениями')
     parser.add_argument('output_folder', help='Путь к выходной папке')
     parser.add_argument('logos_folder', help='Путь к папке с изображениями логотипов')
-    
+    parser.add_argument("--config_path", type=str, default="config_logo.yml", help="Path to the configuration file.")
+
     args = parser.parse_args()
-    
-    main(args.input_folder, args.output_folder, args.logos_folder)
+    # Читаем или создаем конфигурацию
+    if os.path.exists(args.config_path):
+        config = utils.open_yaml(args.config_path)
+    else:
+        config = default_config
+        utils.save_yaml(args.config_path, config)
+    main(args.input_folder, args.output_folder, args.logos_folder, config)
