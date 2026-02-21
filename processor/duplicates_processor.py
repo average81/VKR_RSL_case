@@ -1,12 +1,12 @@
 # processor/duplicates_processor.py
 
-from processor.feature_extractors import FeatureExtractorSIFT, FeatureExtractorORB, FeatureExtractorKAZE
+from processor.feature_extractors import FeatureExtractorSIFT, FeatureExtractorORB, FeatureExtractorKAZE, FeatureExtractorAKAZE
 from processor.feature_matchers import BFMatcher, FLANNmatcher
 from processor.quality_processor import QualityProcessor
 
 
 matchers = {"BF": BFMatcher, "FLANN": FLANNmatcher}
-extractors = {"SIFT": FeatureExtractorSIFT, "ORB": FeatureExtractorORB, "KAZE": FeatureExtractorKAZE}
+extractors = {"SIFT": FeatureExtractorSIFT, "ORB": FeatureExtractorORB, "KAZE": FeatureExtractorKAZE, "AKAZE": FeatureExtractorAKAZE}
 
 class DuplicatesProcessor:
     def __init__(self, feature_extractor="SIFT", matcher_type="BF"):

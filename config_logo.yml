@@ -2,4 +2,4 @@ db_path: processed_images.db
 duplicate_threshold: 0.6
 match_threshold: 0.75
 matcher: FLANN  # Доступные: BF, FLANN
-feature_extractor: AKAZE # Доступные: SIFT, ORB, KAZE, AKAZE
+feature_extractor: KAZE # Доступные: SIFT, ORB, KAZE
