@@ -4,8 +4,10 @@ import argparse
 import yaml
 import logging
 import numpy as np
+import re
 from processor.duplicates_processor import DuplicatesProcessor
 import utils.utils as utils
+from tqdm import tqdm
 
 default_config = {
     "db_path": "processed_images.db",
@@ -27,10 +29,29 @@ def main(input_folder, output_folder, logos_folder, config):
     supported_formats = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif')
     
     # Получение и сортировка списков изображений
-    input_images = sorted([
+    input_images = [
         f for f in os.listdir(input_folder)
         if f.lower().endswith(supported_formats)
-    ])
+    ]
+    # Сортировка с учетом длины имени файла
+    max_len = max([len(f) for f in input_images]) if input_images else 0
+    input_images_with_key = []
+    for f in input_images:
+        # Извлекаем номер из названия файла
+        num_match = re.search(r"(\d+)", f)
+        if num_match:
+            prefix = f[:num_match.start()]
+            postfix = f[num_match.end():]
+            num = num_match.group()
+            # Формируем ключ сортировки с дополнением нулями
+            sort_key = prefix + "0"*(max_len-len(f)) + num + postfix
+        else:
+            sort_key = f
+        input_images_with_key.append((f, sort_key))
+    # Сортируем по ключу
+    input_images_with_key.sort(key=lambda x: x[1])
+    # Извлекаем отсортированные имена файлов
+    input_images = [f for f, key in input_images_with_key]
     
     logo_images = sorted([
         f for f in os.listdir(logos_folder)
@@ -110,14 +131,16 @@ def main(input_folder, output_folder, logos_folder, config):
             logging.error(f"Ошибка при чтении изображения {input_img_path}: {e}")
             continue
         
-        found_logo = False
+        # Извлекаем признаки из изображения
+        kp2, des2 = processor.feature_extractor.extract_features(input_img)
+        max_similarity = 0
+        best_logo_name = None
         
-        # Сравнение с каждым логотипом
+        # Сравнение с каждым логотипом для нахождения максимальной схожести
         for logo_name in logo_images:
             logo_path = os.path.join(logos_folder, logo_name)
             
             try:
-
                 # Получение признаков из кэша
                 if logo_name not in logo_features:
                     continue
@@ -125,51 +148,35 @@ def main(input_folder, output_folder, logos_folder, config):
                 kp1, des1 = logo_features[logo_name]
 
                 # Сравнение изображения с признаками логотипа
-                similarity = processor.compare_with_features(input_img, kp1, des1,match_threshold)
-
-                if similarity >= similarity_threshold:
-                    found_logo = True
-                    logging.info(
-                        f"{input_img_name}, Логотип '{logo_name}' ({round(similarity * 100, 4):>6}%)"
-                    )# Найдено совпадающее название лого
-                    # Если нашли новый логотип, создаем новую группу
-                    current_group = logo_name
-                    # Увеличиваем счётчик для данного логотипа
-                    logo_counters[logo_name] = logo_counters.get(logo_name, 0) + 1
-
-                    # Создаем имя папки группы
-                    logo_name_without_ext = os.path.splitext(logo_name)[0]
-                    group_folder_name = f"{logo_name_without_ext}_{logo_counters[logo_name]}"
-                    group_folder_path = os.path.join(output_folder, group_folder_name)
-
-                    if not os.path.exists(group_folder_path):
-                        os.makedirs(group_folder_path)
-
-                    logging.info(f"Создана группа {group_folder_name} для логотипа {logo_name} (схожесть: {similarity:.3f})")
-                    
-                    # Копируем изображение в текущую группу
-                    output_img_path = os.path.join(group_folder_path, input_img_name)
-                    # Сохранение изображения с поддержкой кириллицы
-                    try:
-                        success, encoded_img = cv2.imencode('.png', input_img)
-                        if success:
-                            with open(output_img_path, 'wb') as f:
-                                f.write(encoded_img)
-                        else:
-                            logging.error(f"Не удалось закодировать изображение для сохранения: {output_img_path}")
-                    except Exception as e:
-                        logging.error(f"Ошибка при сохранении изображения {output_img_path}: {e}")
-                    logging.info(f"  -> {input_img_name}")
-                    
-                    break  # Переход к следующему изображению после нахождения подходящего логотипа
+                similarity = processor.compare_features(kp1, des1, kp2, des2, match_threshold)
+                
+                # Обновляем лучшее совпадение
+                if similarity > max_similarity:
+                    max_similarity = similarity
+                    best_logo_name = logo_name
                     
             except Exception as e:
                 logging.error(f"Ошибка при обработке логотипа {logo_path}: {e}")
                 continue
         
-        # Если логотип не найден, но мы в группе - продолжаем копировать
-        # Если мы не в группе - пропускаем изображение
-        if not found_logo and current_group is not None:
+        # Создание новой группы по максимальной схожести, если она превышает порог
+        if max_similarity >= similarity_threshold:
+            # Если нашли подходящий логотип, создаем новую группу
+            current_group = best_logo_name
+            # Увеличиваем счётчик для данного логотипа
+            logo_counters[best_logo_name] = logo_counters.get(best_logo_name, 0) + 1
+
+            # Создаем имя папки группы
+            logo_name_without_ext = os.path.splitext(best_logo_name)[0]
+            group_folder_name = f"{logo_name_without_ext}_{logo_counters[best_logo_name]}"
+            group_folder_path = os.path.join(output_folder, group_folder_name)
+
+            if not os.path.exists(group_folder_path):
+                os.makedirs(group_folder_path)
+
+            logging.info(f"Создана группа {group_folder_name} для логотипа {best_logo_name} (схожесть: {max_similarity:.3f})")
+            
+            # Копируем изображение в текущую группу
             output_img_path = os.path.join(group_folder_path, input_img_name)
             # Сохранение изображения с поддержкой кириллицы
             try:
@@ -181,7 +188,27 @@ def main(input_folder, output_folder, logos_folder, config):
                     logging.error(f"Не удалось закодировать изображение для сохранения: {output_img_path}")
             except Exception as e:
                 logging.error(f"Ошибка при сохранении изображения {output_img_path}: {e}")
-            logging.info(f"  -> {input_img_name} (продолжение группы)")
+            
+            logging.info(
+                f"{input_img_name}, Логотип '{best_logo_name}' ({round(max_similarity * 100, 4):>6}%)"
+            )
+            logging.info(f"  -> {input_img_name}")
+        
+        # Если логотип не найден, но мы в группе - продолжаем копировать
+        # Если мы не в группе - пропускаем изображение
+        if max_similarity < similarity_threshold and current_group is not None:
+            output_img_path = os.path.join(group_folder_path, input_img_name)
+            # Сохранение изображения с поддержкой кириллицы
+            try:
+                success, encoded_img = cv2.imencode('.png', input_img)
+                if success:
+                    with open(output_img_path, 'wb') as f:
+                        f.write(encoded_img)
+                else:
+                    logging.error(f"Не удалось закодировать изображение для сохранения: {output_img_path}")
+            except Exception as e:
+                logging.error(f"Ошибка при сохранении изображения {output_img_path}: {e}")
+            logging.info(f"  -> {input_img_name} (продолжение группы), наиболее близкое: {best_logo_name}, схожесть: {max_similarity:.3f}")
     
     logging.info("Обработка завершена.")
 
