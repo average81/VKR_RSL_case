@@ -8,13 +8,14 @@ import re
 from processor.duplicates_processor import DuplicatesProcessor
 import utils.utils as utils
 from tqdm import tqdm
+import pandas as pd
 
 default_config = {
     "db_path": "processed_images.db",
     "match_threshold": 0.75,
     "duplicate_threshold": 0.7}
 
-def main(input_folder, output_folder, logos_folder, config):
+def main(input_folder, output_folder, logos_folder, config, save_metrics=False, metrics=None):
     # Проверка существования папок
     if not os.path.exists(input_folder):
         raise FileNotFoundError(f"Папка входных изображений не найдена: {input_folder}")
@@ -121,6 +122,10 @@ def main(input_folder, output_folder, logos_folder, config):
     group_folder_path = None  # Переменная для хранения пути текущей папки группы
     logging.info(f"Начинаю обработку {len(input_images)} изображений...")
     
+    # Импортируем pandas здесь, чтобы не требовать его при отключенном режиме метрик
+    if save_metrics:
+        import pandas as pd
+        
     for input_img_name in input_images:
         input_img_path = os.path.join(input_folder, input_img_name)
         
@@ -188,6 +193,10 @@ def main(input_folder, output_folder, logos_folder, config):
 
             logging.info(f"Создана группа {group_folder_name} для папки {best_folder_name} (схожесть: {max_similarity:.3f})")
             
+            # Сохраняем метрики, если включен режим
+            if save_metrics:
+                metrics.loc[len(metrics)] = [input_img_name, f"{best_folder_name}/{best_logo_name}", max_similarity]
+            
             # Копируем изображение в текущую группу
             output_img_path = os.path.join(group_folder_path, input_img_name)
             # Сохранение изображения с поддержкой кириллицы
@@ -221,8 +230,17 @@ def main(input_folder, output_folder, logos_folder, config):
             except Exception as e:
                 logging.error(f"Ошибка при сохранении изображения {output_img_path}: {e}")
             logging.info(f"  -> {input_img_name} (продолжение группы), наиболее близкое: {best_folder_name}/{best_logo_name}, схожесть: {max_similarity:.3f}")
+            
+            # Сохраняем метрики, если включен режим
+            if save_metrics:
+                metrics.loc[len(metrics)] = [input_img_name, f"{best_folder_name}/{best_logo_name}", max_similarity]
     
     logging.info("Обработка завершена.")
+    
+    # Сохраняем метрики в файл, если включен режим
+    if save_metrics:
+        metrics.to_csv(f"{output_folder}/metrics.csv", index=False)
+        logging.info(f"Метрики сохранены в {output_folder}/metrics.csv")
 
 if __name__ == "__main__":
     # Настройка логирования
@@ -240,6 +258,7 @@ if __name__ == "__main__":
     parser.add_argument('output_folder', help='Путь к выходной папке')
     parser.add_argument('logos_folder', help='Путь к папке с изображениями логотипов')
     parser.add_argument("--config_path", type=str, default="config_logo.yml", help="Path to the configuration file.")
+    parser.add_argument("-m", "--metrics", action="store_true", help="Enable metrics logging.")
 
     args = parser.parse_args()
     # Читаем или создаем конфигурацию
@@ -248,4 +267,8 @@ if __name__ == "__main__":
     else:
         config = default_config
         utils.save_yaml(args.config_path, config)
-    main(args.input_folder, args.output_folder, args.logos_folder, config)
+    
+    # Инициализация DataFrame для метрик
+    metrics = pd.DataFrame(columns=['название файла', 'название логотипа', 'степень схожести'])
+    
+    main(args.input_folder, args.output_folder, args.logos_folder, config, args.metrics, metrics)
