@@ -8,7 +8,7 @@ def get_true_group_name(image_file, mapping_df):
     """
     Получает истинное название группы (газеты/журнала) для изображения из mapping.csv
     """
-    row = mapping_df[mapping_df['image_file'] == image_file]
+    row = mapping_df[mapping_df['image_file'].str.split('.').str[0] == image_file.split('.')[0]]
     if len(row) > 0:
         return row.iloc[0]['name']
     return None

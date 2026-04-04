@@ -152,7 +152,12 @@ def main(input_folder, output_folder, logos_folder, config, save_metrics=False, 
         kp2, des2 = processor.feature_extractor.extract_features(input_img)
         max_similarity = 0
         best_logo_name = None
-        
+        if des2 is None:
+            logging.warning(f"Пропуск изображения {input_img_name}: не найдено ключевых точек")
+            continue  # 🔽 Пропускаем это изображение
+        if des2.size == 0:
+            logging.warning(f"Пропуск изображения {input_img_name}: не найдено ключевых точек")
+            continue  # 🔽 Пропускаем это изображение
         # Сравнение с каждым логотипом для нахождения максимальной схожести
         for (folder_name, logo_name) in logo_features.keys():
             logo_path = os.path.join(logos_folder, folder_name, logo_name)
