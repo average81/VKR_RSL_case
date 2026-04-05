@@ -53,7 +53,6 @@ def main(input_folder, output_folder, logos_folder, config, save_metrics=False, 
     input_images_with_key.sort(key=lambda x: x[1])
     # Извлекаем отсортированные имена файлов
     input_images = [f for f, key in input_images_with_key]
-    
     # Получаем список подпапок в папке логотипов
     logo_subfolders = [f for f in os.listdir(logos_folder) if os.path.isdir(os.path.join(logos_folder, f))]
     

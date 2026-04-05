@@ -1,11 +1,11 @@
 # processor/duplicates_processor.py
 
 from processor.feature_extractors import FeatureExtractorSIFT, FeatureExtractorORB, FeatureExtractorKAZE, FeatureExtractorAKAZE
-from processor.feature_matchers import BFMatcher, FLANNmatcher
+from processor.feature_matchers import BFMatcher, FLANNmatcher,SymmetricMatcher
 from processor.quality_processor import QualityProcessor
 
 
-matchers = {"BF": BFMatcher, "FLANN": FLANNmatcher}
+matchers = {"BF": BFMatcher, "FLANN": FLANNmatcher, "SM": SymmetricMatcher}
 extractors = {"SIFT": FeatureExtractorSIFT, "ORB": FeatureExtractorORB, "KAZE": FeatureExtractorKAZE, "AKAZE": FeatureExtractorAKAZE}
 
 class DuplicatesProcessor:
@@ -41,7 +41,7 @@ class DuplicatesProcessor:
             
         matches, good = self.matcher.match(kp1, features1, kp2, features2, threshold)
 
-        if matches is not None and len(matches) > 10:
+        if matches is not None and len(matches) > 5:
             return sum(matches) / len(matches)
         return 0.0
         

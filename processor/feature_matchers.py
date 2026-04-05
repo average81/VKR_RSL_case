@@ -92,32 +92,37 @@ class SymmetricMatcher():
         hamming_dist = np.count_nonzero(xor_result)
         return hamming_dist
     
-    def find_nearest_neighbor(self,descriptor, descriptors):
+    def find_nearest_neighbor(self, descriptor, descriptors):
         """Находит ближайшего соседа для заданного дескриптора."""
-        min_dist = float('inf')
-        nearest_idx = -1
-        for i, desc in enumerate(descriptors):
-            dist = self.calc_distance(descriptor, desc)
-            if dist < min_dist:
-                min_dist = dist
-                nearest_idx = i
+        if len(descriptors) == 0:
+            return -1, float('inf')
+        
+        # Векторизованное вычисление расстояний
+        distances = np.array([self.calc_distance(descriptor, desc) for desc in descriptors])
+        nearest_idx = np.argmin(distances)
+        min_dist = distances[nearest_idx]
         return nearest_idx, min_dist
     
     def is_mutual_nearest_neighbor(self, idx1, idx2, descriptors1, descriptors2):
         """
         Проверяет, являются ли две точки взаимно ближайшими соседями.
         """
-        # Проверяем, что desc1[idx1] -> desc2[idx2]
-        nn2_idx, _ = self.find_nearest_neighbor(descriptors1[idx1], descriptors2)
-        if nn2_idx != idx2:
+        if idx1 >= len(descriptors1) or idx2 >= len(descriptors2):
             return False
-    
-        # Проверяем, что desc2[idx2] -> desc1[idx1]
-        nn1_idx, _ = self.find_nearest_neighbor(descriptors2[idx2], descriptors1)
-        if nn1_idx != idx1:
-            return False
-    
-        return True
+            
+        # Получаем дескрипторы
+        desc1 = descriptors1[idx1]
+        desc2 = descriptors2[idx2]
+        
+        # Векторизованное вычисление расстояний
+        dists1_to_2 = np.array([self.calc_distance(desc1, desc) for desc in descriptors2])
+        dists2_to_1 = np.array([self.calc_distance(desc2, desc) for desc in descriptors1])
+        
+        # Проверяем взаимность
+        nn2_idx = np.argmin(dists1_to_2)
+        nn1_idx = np.argmin(dists2_to_1)
+        
+        return nn2_idx == idx2 and nn1_idx == idx1
     
     def match(self, kp1, desc1, kp2, desc2, threshold=0.75):
         """
@@ -128,27 +133,83 @@ class SymmetricMatcher():
         - good_matches: список хороших матчей
         - oos: множество пар взаимно ближайших соседей
         """
+        if desc1 is None or desc2 is None or len(desc1) == 0 or len(desc2) == 0:
+            return None, [], []
+            
         oos = []  # Множество пар взаимно ближайших соседей
-    
-        # Для каждой точки в первом изображении
-        for i in range(len(desc1)):
-            nn2_idx, dist1 = self.find_nearest_neighbor(desc1[i], desc2)
-    
-            # Проверяем условие взаимности
-            if self.is_mutual_nearest_neighbor(i, nn2_idx, desc1, desc2):
-                # Дополнительно применяем пороговое фильтрование по соотношению расстояний
-                # Находим второго ближайшего соседа
-                min_dist = float('inf')
-                second_nn_idx = -1
-                for j in range(len(desc2)):
-                    if j != nn2_idx:
-                        dist = self.calc_distance(desc1[i], desc2[j])
-                        if dist < min_dist:
-                            min_dist = dist
-                            second_nn_idx = j
-    
-                if second_nn_idx != -1 and dist1 < threshold * min_dist:
-                    oos.append((i, nn2_idx))
+        
+        # Преобразуем дескрипторы в numpy массивы
+        desc1_array = np.array(desc1)
+        desc2_array = np.array(desc2)
+        
+        # Оптимизация по памяти: обработка по блокам
+        block_size = 500  # Размер блока для обработки
+        n1, n2 = len(desc1), len(desc2)
+        
+        # Предварительная инициализация для поиска ближайших соседей
+        nn2_indices = np.zeros(n1, dtype=int)
+        nn1_distances = np.full(n2, np.inf)
+        nn1_indices = np.zeros(n2, dtype=int)
+        
+        # Обработка по блокам для поиска ближайших соседей из второго изображения
+        for i in range(0, n1, block_size):
+            end_i = min(i + block_size, n1)
+            block1 = desc1_array[i:end_i]
+            
+            if self.feature_extractor in ("SIFT", "KAZE", "AKAZE"):
+                # Euclidean расстояние
+                block_distances = np.linalg.norm(block1[:, np.newaxis] - desc2_array, axis=2)
+            else:
+                # Hamming расстояние
+                if desc1_array.dtype != np.uint8:
+                    block1 = (block1 > 0).astype(np.uint8)
+                if desc2_array.dtype != np.uint8:
+                    desc2_array_local = (desc2_array > 0).astype(np.uint8)
+                else:
+                    desc2_array_local = desc2_array
+                xor_block = block1[:, np.newaxis] ^ desc2_array_local
+                block_distances = np.count_nonzero(xor_block, axis=2)
+            
+            # Находим ближайших соседей в блоке
+            block_nn2 = np.argmin(block_distances, axis=1)
+            nn2_indices[i:end_i] = block_nn2
+            
+            # Обновляем ближайших соседей из первого изображения
+            for j in range(n2):
+                col_distances = block_distances[:, j]
+                col_indices = np.argmin(col_distances)
+                if col_distances[col_indices] < nn1_distances[j]:
+                    nn1_distances[j] = col_distances[col_indices]
+                    nn1_indices[j] = col_indices + i  # Смещение индекса
+        
+        # Проверяем взаимность для всех пар
+        for i in range(n1):
+            j = nn2_indices[i]
+            if nn1_indices[j] == i:  # Взаимность
+                # Находим второе минимальное расстояние (кроме текущего)
+                if self.feature_extractor in ("SIFT", "KAZE", "AKAZE"):
+                    # Для Euclidean расстояния используем broadcasting
+                    dist_i = np.linalg.norm(desc1_array[i] - desc2_array, axis=1)
+                else:
+                    # Для Hamming расстояния используем broadcasting
+                    d1 = desc1_array[i]
+                    if d1.dtype != np.uint8:
+                        d1 = (d1 > 0).astype(np.uint8)
+                    if desc2_array.dtype != np.uint8:
+                        d2_array = (desc2_array > 0).astype(np.uint8)
+                    else:
+                        d2_array = desc2_array
+                    # Вычисляем XOR для всех дескрипторов
+                    xor_result = d1 ^ d2_array
+                    # Считаем количество единиц для каждого дескриптора
+                    dist_i = np.count_nonzero(xor_result, axis=1)
+                
+                # Удаляем текущее расстояние и находим второе минимальное
+                dist_i_without_j = np.delete(dist_i, j)
+                if len(dist_i_without_j) > 0:
+                    second_min_dist = np.min(dist_i_without_j)
+                    if dist_i[j] < threshold * second_min_dist:
+                        oos.append((i, j))
     
         # Формируем результат в формате, совместимом с существующим кодом
         good_matches = []
@@ -163,10 +224,10 @@ class SymmetricMatcher():
     
         # Генерируем маску для RANSAC
         matchesMask = None
-        if len(good_matches) > 10:
+        if len(good_matches) > 5:
             src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
             dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
             M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
             matchesMask = mask.ravel().tolist()
     
-        return matchesMask, good_matches, oos
+        return matchesMask, good_matches
