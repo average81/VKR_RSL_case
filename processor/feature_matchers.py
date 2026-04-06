@@ -1,5 +1,8 @@
 import cv2
 import numpy as np
+from multiprocessing import Pool, cpu_count
+import multiprocessing
+from functools import partial
 
 class BFMatcher:
     def __init__(self, feature_extractor="SIFT"):
@@ -182,34 +185,45 @@ class SymmetricMatcher():
                     nn1_distances[j] = col_distances[col_indices]
                     nn1_indices[j] = col_indices + i  # Смещение индекса
         
-        # Проверяем взаимность для всех пар
-        for i in range(n1):
+        # Параллельная проверка взаимности для всех пар
+        def check_mutual_nn(i):
             j = nn2_indices[i]
-            if nn1_indices[j] == i:  # Взаимность
-                # Находим второе минимальное расстояние (кроме текущего)
-                if self.feature_extractor in ("SIFT", "KAZE", "AKAZE"):
-                    # Для Euclidean расстояния используем broadcasting
-                    dist_i = np.linalg.norm(desc1_array[i] - desc2_array, axis=1)
-                else:
-                    # Для Hamming расстояния используем broadcasting
-                    d1 = desc1_array[i]
-                    if d1.dtype != np.uint8:
-                        d1 = (d1 > 0).astype(np.uint8)
-                    if desc2_array.dtype != np.uint8:
-                        d2_array = (desc2_array > 0).astype(np.uint8)
-                    else:
-                        d2_array = desc2_array
-                    # Вычисляем XOR для всех дескрипторов
-                    xor_result = d1 ^ d2_array
-                    # Считаем количество единиц для каждого дескриптора
-                    dist_i = np.count_nonzero(xor_result, axis=1)
+            if nn1_indices[j] != i:  # Нет взаимности
+                return None
                 
-                # Удаляем текущее расстояние и находим второе минимальное
-                dist_i_without_j = np.delete(dist_i, j)
-                if len(dist_i_without_j) > 0:
-                    second_min_dist = np.min(dist_i_without_j)
-                    if dist_i[j] < threshold * second_min_dist:
-                        oos.append((i, j))
+            # Находим второе минимальное расстояние (кроме текущего)
+            if self.feature_extractor in ("SIFT", "KAZE", "AKAZE"):
+                # Для Euclidean расстояния используем broadcasting
+                dist_i = np.linalg.norm(desc1_array[i] - desc2_array, axis=1)
+            else:
+                # Для Hamming расстояния используем broadcasting
+                d1 = desc1_array[i]
+                if d1.dtype != np.uint8:
+                    d1 = (d1 > 0).astype(np.uint8)
+                if desc2_array.dtype != np.uint8:
+                    d2_array = (desc2_array > 0).astype(np.uint8)
+                else:
+                    d2_array = desc2_array
+                # Вычисляем XOR для всех дескрипторов
+                xor_result = d1 ^ d2_array
+                # Считаем количество единиц для каждого дескриптора
+                dist_i = np.count_nonzero(xor_result, axis=1)
+            
+            # Удаляем текущее расстояние и находим второе минимальное
+            dist_i_without_j = np.delete(dist_i, j)
+            if len(dist_i_without_j) > 0:
+                second_min_dist = np.min(dist_i_without_j)
+                if dist_i[j] < threshold * second_min_dist:
+                    return (i, j)
+            return None
+
+        # Используем multiprocessing для параллельной обработки
+        num_processes = min(cpu_count(), 4)  # Ограничиваем количество процессов
+        with Pool(processes=num_processes) as pool:
+            results = pool.map(check_mutual_nn, range(n1))
+            
+        # Собираем результаты
+        oos = [result for result in results if result is not None]
     
         # Формируем результат в формате, совместимом с существующим кодом
         good_matches = []
