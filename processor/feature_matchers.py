@@ -55,7 +55,7 @@ class FLANNmatcher:
         # Implement feature matching
         good = []
         if len(features1) >= 2 and len(features2) >= 2:
-            matches = self.flann.knnMatch(features1.astype(np.float32), features2.astype(np.float32), k=2)
+            matches = self.flann.knnMatch(features1, features2, k=2)
             for match in matches:
                 if len(match) == 2:
                     m, n = match

@@ -124,7 +124,7 @@ def main(input_folder, output_folder, logos_folder, config, save_metrics=False, 
     # Импортируем pandas здесь, чтобы не требовать его при отключенном режиме метрик
     if save_metrics:
         import pandas as pd
-        
+    best_folder_name = ""
     for input_img_name in input_images:
         input_img_path = os.path.join(input_folder, input_img_name)
         
@@ -196,11 +196,7 @@ def main(input_folder, output_folder, logos_folder, config, save_metrics=False, 
                 os.makedirs(group_folder_path)
 
             logging.info(f"Создана группа {group_folder_name} для папки {best_folder_name} (схожесть: {max_similarity:.3f})")
-            
-            # Сохраняем метрики, если включен режим
-            if save_metrics:
-                metrics.loc[len(metrics)] = [input_img_name, f"{best_folder_name}/{best_logo_name}", max_similarity]
-            
+
             # Копируем изображение в текущую группу
             output_img_path = os.path.join(group_folder_path, input_img_name)
             # Сохранение изображения с поддержкой кириллицы
@@ -234,10 +230,11 @@ def main(input_folder, output_folder, logos_folder, config, save_metrics=False, 
             except Exception as e:
                 logging.error(f"Ошибка при сохранении изображения {output_img_path}: {e}")
             logging.info(f"  -> {input_img_name} (продолжение группы), наиболее близкое: {best_folder_name}/{best_logo_name}, схожесть: {max_similarity:.3f}")
-            
-            # Сохраняем метрики, если включен режим
-            if save_metrics:
-                metrics.loc[len(metrics)] = [input_img_name, f"{best_folder_name}/{best_logo_name}", max_similarity]
+        else:
+            logging.info(f"  -> {input_img_name} (вне группы), наиболее близкое: {best_logo_name}, схожесть: {max_similarity:.3f}")
+        # Сохраняем метрики, если включен режим
+        if save_metrics:
+            metrics.loc[len(metrics)] = [input_img_name, f"{best_folder_name}/{best_logo_name}", max_similarity]
     
     logging.info("Обработка завершена.")
     

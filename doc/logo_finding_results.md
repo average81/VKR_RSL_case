@@ -11,13 +11,13 @@
 | SIFT+BF     | 14с                                      | 0.7146            | 0.4176         | 0.9375               | 0.3918                | 0.4471             | 0.6410 |
 | SIFT+FLANN  | 11с                                      | 0.6957            | 0.4541         | 0.9334               | 0.3852                | 0.5529             | 0.7303 |
 | SIFT+SM     |                                          |                   |                |                      |                       |                    |        |
-| ORB+BF      |                                          |                   |                |                      |                       |                    |        |
-| ORB+FLANN   |                                          |                   |                |                      |                       |                    |        |
+| ORB+BF      | 2с                                       | 0.0175            | 0.2857         | 0.9440               | 0.3958                | 0.2235             | 0.6223 |
+| ORB+FLANN   | 2с                                       | 0.5581            | 0.1676         | 0.9121               | 0.1579                | 0.1786             | 0.3679 |
 | ORB+SM      |                                          |                   |                |                      |                       |                    |        |
 | KAZE+BF     | 29c                                      | 0.5091            | 0.2815         | 0.8856               | 0.2041                | 0.4524             | 0.7731 |
 | KAZE+FLANN  | 29c                                      | 0.5652            | 0.2471         | 0.9245               | 0.2471                | 0.2471             | 0.7546 |
 | KAZE+SM     |                                          |                   |                |                      |                       |                    |        |
-| AKAZE+BF    |                                          |                   |                |                      |                       |                    |        |
+| AKAZE+BF    | 8с                                       | 0.5893            | 0.8497         | 0.9864               | 0.9559                | 0.7647             | 0.9050 |
 | AKAZE+FLANN |                                          |                   |                |                      |                       |                    |        |
 | AКAZE+SM    |                                          |                   |                |                      |                       |                    |        |
 
@@ -27,10 +27,10 @@
 ![](logos_rocauc_sift+flann.png)  
 Рисунок 3 - Кривая ROC AUC алгоритма SIFT+SM
 
-Рисунок 4 - Кривая ROC AUC алгоритма ORB+BF
-
-Рисунок 5 - Кривая ROC AUC алгоритма ORB+FLANN
-
+Рисунок 4 - Кривая ROC AUC алгоритма ORB+BF  
+![](logos_rocauc_orb+bf.png)  
+Рисунок 5 - Кривая ROC AUC алгоритма ORB+FLANN  
+![](logos_rocauc_orb+flann.png)  
 Рисунок 6 - Кривая ROC AUC алгоритма ORB+SM
 
 Рисунок 7 - Кривая ROC AUC алгоритма KAZE+BF  
@@ -39,8 +39,8 @@
 ![](logos_rocauc_kaze+flann.png)  
 Рисунок 9 - Кривая ROC AUC алгоритма KAZE+SM
 
-Рисунок 10 - Кривая ROC AUC алгоритма AKAZE+BF
-
+Рисунок 10 - Кривая ROC AUC алгоритма AKAZE+BF  
+![](logos_rocauc_akaze+bf.png)  
 Рисунок 11 - Кривая ROC AUC алгоритма AKAZE+FLANN
 
 Рисунок 12 - Кривая ROC AUC алгоритма AКAZE+SM
