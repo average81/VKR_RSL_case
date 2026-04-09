@@ -51,11 +51,15 @@ class FLANNmatcher:
             index_params = dict(algorithm=1, trees=5)
         search_params = dict(checks=50)
         self.flann = cv2.FlannBasedMatcher(index_params, search_params)
+        self.feature_extractor = feature_extractor
     def match(self, kp1, features1, kp2, features2, threshold=0.75):
         # Implement feature matching
         good = []
         if len(features1) >= 2 and len(features2) >= 2:
-            matches = self.flann.knnMatch(features1, features2, k=2)
+            if self.feature_extractor == "AKAZE":
+                matches = self.flann.knnMatch(features1.astype(np.float32), features2.astype(np.float32), k=2)
+            else:
+                matches = self.flann.knnMatch(features1, features2, k=2)
             for match in matches:
                 if len(match) == 2:
                     m, n = match

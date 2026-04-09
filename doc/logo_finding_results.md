@@ -18,7 +18,7 @@
 | KAZE+FLANN  | 29c                                      | 0.5652            | 0.2471         | 0.9245               | 0.2471                | 0.2471             | 0.7546 |
 | KAZE+SM     |                                          |                   |                |                      |                       |                    |        |
 | AKAZE+BF    | 8с                                       | 0.5893            | 0.8497         | 0.9864               | 0.9559                | 0.7647             | 0.9050 |
-| AKAZE+FLANN |                                          |                   |                |                      |                       |                    |        |
+| AKAZE+FLANN | 8с                                       | 0.5385            | 0.8571         | 0.9870               | 0.9565                | 0.7765             | 0.9115 |
 | AКAZE+SM    |                                          |                   |                |                      |                       |                    |        |
 
 Рисунок 1 - Кривая ROC AUC алгоритма SIFT+BF  
@@ -41,8 +41,8 @@
 
 Рисунок 10 - Кривая ROC AUC алгоритма AKAZE+BF  
 ![](logos_rocauc_akaze+bf.png)  
-Рисунок 11 - Кривая ROC AUC алгоритма AKAZE+FLANN
-
+Рисунок 11 - Кривая ROC AUC алгоритма AKAZE+FLANN  
+![](logos_rocauc_akaze+flann.png)  
 Рисунок 12 - Кривая ROC AUC алгоритма AКAZE+SM
 
 ---
