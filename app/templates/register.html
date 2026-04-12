@@ -23,7 +23,7 @@
                     {% endfor %}
                 {% endif %}
 
-                <form method="post" action="/auth/register">
+                <form id="registerForm" method="post">
                     <div class="mb-3">
                         <label for="username" class="form-label">Имя пользователя</label>
                         <input type="text" class="form-control" id="username" name="username" required>
@@ -50,5 +50,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/register.js"></script>
 </body>
 </html>

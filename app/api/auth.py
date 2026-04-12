@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Form
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
@@ -45,6 +45,7 @@ def verify_password(plain_password, hashed_password):
     return cpwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password):
+    print(password,len(password))
     return cpwd_context.hash(password)
 
 def get_user(db: Session, username: str):
@@ -179,7 +180,7 @@ def get_register_form(
     )
 
 @router.post("/register", response_model=UserSchema)
-def register_user(user: UserCreate, db: Session = Depends(get_db)):
+async def register_user(user: UserCreate, db: Session = Depends(get_db)):
     db_user = get_user(db, username=user.username)
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")

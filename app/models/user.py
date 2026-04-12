@@ -23,6 +23,9 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    email: str
+    is_superuser: bool = False
+    username: str
 
 class UserSchema(UserBase):
     id: int
