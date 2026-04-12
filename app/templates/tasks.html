@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}Задачи - VKR RSL Case{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Задачи</h1>
+    {% if current_user.is_superuser %}
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createTaskModal">
+        <i class="bi bi-plus-lg"></i> Создать задачу
+    </button>
+    {% endif %}
+</div>
+
+<!-- Фильтры -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Статус</label>
+                <select name="status" class="form-select">
+                    <option value="">Все</option>
+                    <option value="pending" {% if request.args.get('status') == 'pending' %}selected{% endif %}>Ожидание</option>
+                    <option value="in_progress" {% if request.args.get('status') == 'in_progress' %}selected{% endif %}>В процессе</option>
+                    <option value="completed" {% if request.args.get('status') == 'completed' %}selected{% endif %}>Завершено</option>
+                    <option value="validated" {% if request.args.get('status') == 'validated' %}selected{% endif %}>Подтверждено</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Этап</label>
+                <select name="stage" class="form-select">
+                    <option value="">Все</option>
+                    <option value="1" {% if request.args.get('stage') == '1' %}selected{% endif %}>Поиск дубликатов</option>
+                    <option value="2" {% if request.args.get('stage') == '2' %}selected{% endif %}>Группировка по выпускам</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Поиск</label>
+                <input type="text" name="q" class="form-control" placeholder="Название задачи..." value="{{ request.args.get('q', '') }}">
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-secondary w-100">Фильтровать</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Список задач -->
+<div class="row g-4">
+    {% for task in tasks %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card task-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h5 class="card-title mb-0">{{ task.title }}</h5>
+                    <span class="badge bg-{{ 'success' if task.status == 'validated' else 'primary' if task.status == 'completed' else 'warning' if task.status == 'in_progress' else 'secondary' }}">
+                        {{ {'pending': 'Ожидание', 'in_progress': 'В процессе', 'completed': 'Завершено', 'validated': 'Подтверждено'}[task.status] }}
+                    </span>
+                </div>
+                
+                <p class="card-text text-muted">{{ task.description[:100] }}{% if task.description|length > 100 %}...{% endif %}</p>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <small>Прогресс</small>
+                        <small>{{ task.progress }} / {{ task.total_images }}</small>
+                    </div>
+                    <div class="progress" style="height: 6px;">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ (task.progress / task.total_images * 100) if task.total_images > 0 else 0 }}%"></div>
+                    </div>
+                </div>
+                
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <small class="text-muted">Этап</small>
+                        <div class="fw-medium">{{ 'Поиск дубликатов' if task.stage == 1 else 'Группировка по выпускам' }}</div>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">Создана</small>
+                        <div class="fw-medium">{{ task.created_at.strftime('%d.%m.%Y') }}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card-footer bg-transparent border-top-0">
+                <div class="d-grid gap-2">
+                    <a href="/tasks/{{ task.id }}" class="btn btn-outline-primary btn-sm">Просмотреть</a>
+                    
+                    {% if task.status == 'completed' and not task.validated_at and current_user.is_superuser %}
+                    <button class="btn btn-success btn-sm" onclick="validateTask({{ task.id }})">Подтвердить</button>
+                    {% endif %}
+                    
+                    {% if task.status == 'pending' and task.owner_id == current_user.id %}
+                    <button class="btn btn-primary btn-sm" onclick="startProcessing({{ task.id }})">Начать обработку</button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="alert alert-info text-center">
+            <i class="bi bi-info-circle"></i> Задачи не найдены
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Пагинация -->
+{% if tasks|length > 0 %}
+<nav aria-label="Пагинация" class="mt-4">
+    <ul class="pagination justify-content-center">
+        <li class="page-item {% if page == 1 %}disabled{% endif %}">
+            <a class="page-link" href="?page={{ page - 1 }}&status={{ request.args.get('status', '') }}&stage={{ request.args.get('stage', '') }}&q={{ request.args.get('q', '') }}">Назад</a>
+        </li>
+        
+        {% for p in range(1, total_pages + 1) %}
+        <li class="page-item {% if p == page %}active{% endif %}">
+            <a class="page-link" href="?page={{ p }}&status={{ request.args.get('status', '') }}&stage={{ request.args.get('stage', '') }}&q={{ request.args.get('q', '') }}">{{ p }}</a>
+        </li>
+        {% endfor %}
+        
+        <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+            <a class="page-link" href="?page={{ page + 1 }}&status={{ request.args.get('status', '') }}&stage={{ request.args.get('stage', '') }}&q={{ request.args.get('q', '') }}">Вперед</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Модальное окно создания задачи -->
+<div class="modal fade" id="createTaskModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Создать задачу</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="/tasks/create">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Название задачи</label>
+                        <input type="text" class="form-control" id="title" name="title" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Описание</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="input_path" class="form-label">Путь к входным данным</label>
+                            <input type="text" class="form-control" id="input_path" name="input_path" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="output_path" class="form-label">Путь к выходным данным</label>
+                            <input type="text" class="form-control" id="output_path" name="output_path" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="stage" class="form-label">Этап обработки</label>
+                        <select class="form-select" id="stage" name="stage">
+                            <option value="1">Поиск дубликатов</option>
+                            <option value="2">Группировка по выпускам</option>
+                        </select>
+                    </div>
+                    
+                    {% if current_user.is_superuser %}
+                    <div class="mb-3">
+                        <label for="owner_id" class="form-label">Назначить сотруднику</label>
+                        <select class="form-select" id="owner_id" name="owner_id">
+                            {% for user in users %}
+                            <option value="{{ user.id }}">{{ user.username }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+async function startProcessing(taskId) {
+    if (!confirm('Начать обработку задачи?')) return;
+    
+    try {
+        const response = await fetch(`/images/${taskId}/process`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            alert('Обработка начата!');
+            location.reload();
+        } else {
+            const data = await response.json();
+            alert('Ошибка: ' + data.detail);
+        }
+    } catch (error) {
+        alert('Ошибка сети: ' + error.message);
+    }
+}
+
+async function validateTask(taskId) {
+    if (!confirm('Подтвердить выполнение задачи?')) return;
+    
+    try {
+        const response = await fetch(`/tasks/${taskId}/validate`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            alert('Задача подтверждена!');
+            location.reload();
+        } else {
+            const data = await response.json();
+            alert('Ошибка: ' + data.detail);
+        }
+    } catch (error) {
+        alert('Ошибка сети: ' + error.message);
+    }
+}
+</script>
+{% endblock %}

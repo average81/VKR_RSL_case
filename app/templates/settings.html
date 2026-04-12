@@ -1,0 +1,599 @@
+{% extends "base.html" %}
+
+{% block title %}Настройки алгоритмов{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Настройки алгоритмов обработки</h1>
+    <div>
+        <button class="btn btn-outline-secondary" onclick="loadDefaults()">
+            <i class="bi bi-arrow-counterclockwise"></i> Сбросить
+        </button>
+        <button class="btn btn-success" onclick="saveSettings()">
+            <i class="bi bi-save"></i> Сохранить
+        </button>
+    </div>
+</div>
+
+<!-- Уведомления -->
+<div id="notification" class="alert alert-success d-none" role="alert">
+    Настройки успешно сохранены!
+</div>
+
+<div class="row">
+    <!-- Навигация по категориям -->
+    <div class="col-md-3">
+        <div class="nav flex-column nav-pills" id="v-pills-tab" role="tablist" aria-orientation="vertical">
+            <button class="nav-link active" id="v-pills-stage1-tab" data-bs-toggle="pill" 
+                    data-bs-target="#v-pills-stage1" type="button" role="tab">
+                <i class="bi bi-search"></i> Поиск дубликатов
+            </button>
+            <button class="nav-link" id="v-pills-stage2-tab" data-bs-toggle="pill" 
+                    data-bs-target="#v-pills-stage2" type="button" role="tab">
+                <i class="bi bi-diagram-3"></i> Группировка по выпускам
+            </button>
+            <button class="nav-link" id="v-pills-preprocessing-tab" data-bs-toggle="pill" 
+                    data-bs-target="#v-pills-preprocessing" type="button" role="tab">
+                <i class="bi bi-sliders"></i> Предобработка
+            </button>
+            <button class="nav-link" id="v-pills-performance-tab" data-bs-toggle="pill" 
+                    data-bs-target="#v-pills-performance" type="button" role="tab">
+                <i class="bi bi-graph-up"></i> Производительность
+            </button>
+        </div>
+    </div>
+
+    <!-- Формы настроек -->
+    <div class="col-md-9">
+        <div class="tab-content" id="v-pills-tabContent">
+            <!-- Настройки этапа 1: Поиск дубликатов -->
+            <div class="tab-pane fade show active" id="v-pills-stage1" role="tabpanel">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Поиск дубликатов</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Алгоритмы сравнения</h6>
+                                
+                                <div class="mb-3">
+                                    <label for="similarity_algorithm" class="form-label">Основной алгоритм</label>
+                                    <select class="form-select" id="similarity_algorithm">
+                                        <option value="phash">pHash (перцепционный хеш)</option>
+                                        <option value="ssim">SSIM (Структурное сходство)</option>
+                                        <option value="mse">MSE (Среднеквадратичная ошибка)</option>
+                                        <option value="histogram">Гистограмма цветов</option>
+                                    </select>
+                                    <div class="form-text">Основной метод определения сходства изображений</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="secondary_algorithm" class="form-label">Дополнительный алгоритм</label>
+                                    <select class="form-select" id="secondary_algorithm">
+                                        <option value="">Нет</option>
+                                        <option value="phash">pHash</option>
+                                        <option value="ssim">SSIM</option>
+                                        <option value="histogram">Гистограмма цветов</option>
+                                    </select>
+                                    <div class="form-text">Вторичный метод для уточнения результатов</div>
+                                </div>
+
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="use_ensemble">
+                                    <label class="form-check-label" for="use_ensemble">
+                                        Использовать ансамбль алгоритмов
+                                    </label>
+                                    <div class="form-text">Комбинировать несколько методов для повышения точности</div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <h6>Пороги принятия решений</h6>
+                                
+                                <div class="mb-3">
+                                    <label for="similarity_threshold" class="form-label">
+                                        Порог сходства: <span id="similarity_threshold_value">0.90</span>
+                                    </label>
+                                    <input type="range" class="form-range" id="similarity_threshold" 
+                                           min="0" max="1" step="0.01" value="0.90">
+                                    <div class="form-text">Минимальное значение сходства для определения дубликатов</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="confidence_threshold" class="form-label">
+                                        Порог уверенности: <span id="confidence_threshold_value">0.85</span>
+                                    </label>
+                                    <input type="range" class="form-range" id="confidence_threshold" 
+                                           min="0" max="1" step="0.01" value="0.85">
+                                    <div class="form-text">Минимальная уверенность в результате сравнения</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="group_size_threshold" class="form-label">
+                                        Минимальный размер группы: <span id="group_size_threshold_value">2</span>
+                                    </label>
+                                    <input type="range" class="form-range" id="group_size_threshold" 
+                                           min="2" max="10" step="1" value="2">
+                                    <div class="form-text">Минимальное количество изображений в группе дубликатов</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Настройки этапа 2: Группировка по выпускам -->
+            <div class="tab-pane fade" id="v-pills-stage2" role="tabpanel">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Группировка по выпускам</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Алгоритмы кластеризации</h6>
+                                
+                                <div class="mb-3">
+                                    <label for="clustering_algorithm" class="form-label">Метод кластеризации</label>
+                                    <select class="form-select" id="clustering_algorithm">
+                                        <option value="kmeans">K-means</option>
+                                        <option value="dbscan">DBSCAN</option>
+                                        <option value="agglomerative">Агломеративная</option>
+                                        <option value="spectral">Спектральная</option>
+                                    </select>
+                                    <div class="form-text">Метод группировки изображений по выпускам</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="feature_extraction" class="form-label">Извлечение признаков</label>
+                                    <select class="form-select" id="feature_extraction">
+                                        <option value="cnn">CNN (нейросеть)</option>
+                                        <option value="hog">HOG (градиенты)</option>
+                                        <option value="sift">SIFT (ключевые точки)</option>
+                                        <option value="color">Цветовые гистограммы</option>
+                                        <option value="texture">Текстурные признаки</option>
+                                    </select>
+                                    <div class="form-text">Метод извлечения признаков из изображений</div>
+                                </div>
+
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="auto_detect_issues">
+                                    <label class="form-check-label" for="auto_detect_issues">
+                                        Автоматическое определение числа выпусков
+                                    </label>
+                                    <div class="form-text">Система сама определит оптимальное количество выпусков</div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <h6>Параметры кластеризации</h6>
+                                
+                                <div class="mb-3">
+                                    <label for="n_clusters" class="form-label">
+                                        Число выпусков: <span id="n_clusters_value">5</span>
+                                    </label>
+                                    <input type="range" class="form-range" id="n_clusters" 
+                                           min="2" max="20" step="1" value="5">
+                                    <div class="form-text">Ожидаемое количество выпусков (если не включено автоопределение)</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="eps" class="form-label">
+                                        Радиус окрестности (DBSCAN): <span id="eps_value">0.5</span>
+                                    </label>
+                                    <input type="range" class="form-range" id="eps" 
+                                           min="0.1" max="2.0" step="0.1" value="0.5">
+                                    <div class="form-text">Максимальное расстояние между точками в одном кластере</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="min_samples" class="form-label">
+                                        Минимальные образцы (DBSCAN): <span id="min_samples_value">5</span>
+                                    </label>
+                                    <input type="range" class="form-range" id="min_samples" 
+                                           min="2" max="20" step="1" value="5">
+                                    <div class="form-text">Минимальное число точек в окрестности для формирования кластера</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="linkage" class="form-label">Связность (Агломеративная)</label>
+                                    <select class="form-select" id="linkage">
+                                        <option value="ward">Ward</option>
+                                        <option value="complete">Полная</option>
+                                        <option value="average">Средняя</option>
+                                        <option value="single">Одиночная</option>
+                                    </select>
+                                    <div class="form-text">Метод вычисления расстояния между кластерами</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Настройки предобработки -->
+            <div class="tab-pane fade" id="v-pills-preprocessing" role="tabpanel">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Предобработка изображений</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Базовые преобразования</h6>
+                                
+                                <div class="mb-3">
+                                    <label for="resize_width" class="form-label">Ширина ресайза</label>
+                                    <input type="number" class="form-control" id="resize_width" value="224" min="32" max="2048">
+                                    <div class="form-text">Ширина изображения после изменения размера (в пикселях)</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="resize_height" class="form-label">Высота ресайза</label>
+                                    <input type="number" class="form-control" id="resize_height" value="224" min="32" max="2048">
+                                    <div class="form-text">Высота изображения после изменения размера (в пикселях)</div>
+                                </div>
+
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="maintain_aspect_ratio">
+                                    <label class="form-check-label" for="maintain_aspect_ratio">
+                                        Сохранять соотношение сторон
+                                    </label>
+                                    <div class="form-text">Изменять размер с сохранением пропорций изображения</div>
+                                </div>
+
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="convert_grayscale">
+                                    <label class="form-check-label" for="convert_grayscale">
+                                        Преобразовать в оттенки серого
+                                    </label>
+                                    <div class="form-text">Уменьшить количество каналов до одного для ускорения обработки</div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <h6>Улучшение качества</h6>
+                                
+                                <div class="mb-3">
+                                    <label for="denoising_level" class="form-label">
+                                        Уровень шумоподавления: <span id="denoising_level_value">10</span>
+                                    </label>
+                                    <input type="range" class="form-range" id="denoising_level" 
+                                           min="0" max="50" step="1" value="10">
+                                    <div class="form-text">Интенсивность удаления шума из изображения</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="sharpening_level" class="form-label">
+                                        Уровень резкости: <span id="sharpening_level_value">1.0</span>
+                                    </label>
+                                    <input type="range" class="form-range" id="sharpening_level" 
+                                           min="0" max="3" step="0.1" value="1.0">
+                                    <div class="form-text">Интенсивность повышения резкости изображения</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="contrast_level" class="form-label">
+                                        Уровень контраста: <span id="contrast_level_value">1.0</span>
+                                    </label>
+                                    <input type="range" class="form-range" id="contrast_level" 
+                                           min="0.5" max="3" step="0.1" value="1.0">
+                                    <div class="form-text">Интенсивность изменения контраста изображения</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="brightness_level" class="form-label">
+                                        Уровень яркости: <span id="brightness_level_value">0.0</span>
+                                    </label>
+                                    <input type="range" class="form-range" id="brightness_level" 
+                                           min="-1" max="1" step="0.1" value="0.0">
+                                    <div class="form-text">Интенсивность изменения яркости изображения</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Настройки производительности -->
+            <div class="tab-pane fade" id="v-pills-performance" role="tabpanel">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Производительность системы</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Ресурсы обработки</h6>
+                                
+                                <div class="mb-3">
+                                    <label for="num_workers" class="form-label">
+                                        Число рабочих процессов: <span id="num_workers_value">4</span>
+                                    </label>
+                                    <input type="range" class="form-range" id="num_workers" 
+                                           min="1" max="16" step="1" value="4">
+                                    <div class="form-text">Количество параллельных процессов обработки</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="batch_size" class="form-label">
+                                        Размер пакета: <span id="batch_size_value">32</span>
+                                    </label>
+                                    <input type="range" class="form-range" id="batch_size" 
+                                           min="1" max="128" step="1" value="32">
+                                    <div class="form-text">Количество изображений, обрабатываемых за один раз</div>
+                                </div>
+
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="use_gpu">
+                                    <label class="form-check-label" for="use_gpu">
+                                        Использовать GPU
+                                    </label>
+                                    <div class="form-text">Использовать графический процессор для ускорения вычислений</div>
+                                </div>
+
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="use_mixed_precision">
+                                    <label class="form-check-label" for="use_mixed_precision">
+                                        Смешанная точность вычислений
+                                    </label>
+                                    <div class="form-text">Использовать FP16 для ускорения при незначительной потере точности</div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <h6>Оптимизация памяти</h6>
+                                
+                                <div class="mb-3">
+                                    <label for="cache_size" class="form-label">
+                                        Размер кэша: <span id="cache_size_value">1024</span> МБ
+                                    </label>
+                                    <input type="range" class="form-range" id="cache_size" 
+                                           min="128" max="4096" step="128" value="1024">
+                                    <div class="form-text">Максимальный объем памяти для кэширования данных</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="memory_threshold" class="form-label">
+                                        Порог использования памяти: <span id="memory_threshold_value">80</span>%
+                                    </label>
+                                    <input type="range" class="form-range" id="memory_threshold" 
+                                           min="50" max="95" step="1" value="80">
+                                    <div class="form-text">Максимальный процент использования оперативной памяти</div>
+                                </div>
+
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="enable_compression">
+                                    <label class="form-check-label" for="enable_compression">
+                                        Включить сжатие данных
+                                    </label>
+                                    <div class="form-text">Сжимать промежуточные данные для экономии памяти</div>
+                                </div>
+
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="stream_processing">
+                                    <label class="form-check-label" for="stream_processing">
+                                        Потоковая обработка
+                                    </label>
+                                    <div class="form-text">Обрабатывать изображения по мере поступления без полной загрузки в память</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Обновление значений слайдеров
+document.addEventListener('input', function(e) {
+    if (e.target.type === 'range') {
+        const valueSpan = document.getElementById(e.target.id + '_value');
+        if (valueSpan) {
+            valueSpan.textContent = e.target.value;
+        }
+    }
+});
+
+// Загрузка сохраненных настроек
+async function loadSettings() {
+    try {
+        const response = await fetch('/api/settings');
+        if (response.ok) {
+            const settings = await response.json();
+            
+            // Заполнение формы значениями из настроек
+            document.getElementById('similarity_algorithm').value = settings.stage1.similarity_algorithm || 'phash';
+            document.getElementById('secondary_algorithm').value = settings.stage1.secondary_algorithm || '';
+            document.getElementById('use_ensemble').checked = settings.stage1.use_ensemble || false;
+            document.getElementById('similarity_threshold').value = settings.stage1.similarity_threshold || 0.90;
+            document.getElementById('confidence_threshold').value = settings.stage1.confidence_threshold || 0.85;
+            document.getElementById('group_size_threshold').value = settings.stage1.group_size_threshold || 2;
+            
+            document.getElementById('clustering_algorithm').value = settings.stage2.clustering_algorithm || 'kmeans';
+            document.getElementById('feature_extraction').value = settings.stage2.feature_extraction || 'cnn';
+            document.getElementById('auto_detect_issues').checked = settings.stage2.auto_detect_issues || false;
+            document.getElementById('n_clusters').value = settings.stage2.n_clusters || 5;
+            document.getElementById('eps').value = settings.stage2.eps || 0.5;
+            document.getElementById('min_samples').value = settings.stage2.min_samples || 5;
+            document.getElementById('linkage').value = settings.stage2.linkage || 'ward';
+            
+            document.getElementById('resize_width').value = settings.preprocessing.resize_width || 224;
+            document.getElementById('resize_height').value = settings.preprocessing.resize_height || 224;
+            document.getElementById('maintain_aspect_ratio').checked = settings.preprocessing.maintain_aspect_ratio || false;
+            document.getElementById('convert_grayscale').checked = settings.preprocessing.convert_grayscale || false;
+            document.getElementById('denoising_level').value = settings.preprocessing.denoising_level || 10;
+            document.getElementById('sharpening_level').value = settings.preprocessing.sharpening_level || 1.0;
+            document.getElementById('contrast_level').value = settings.preprocessing.contrast_level || 1.0;
+            document.getElementById('brightness_level').value = settings.preprocessing.brightness_level || 0.0;
+            
+            document.getElementById('num_workers').value = settings.performance.num_workers || 4;
+            document.getElementById('batch_size').value = settings.performance.batch_size || 32;
+            document.getElementById('use_gpu').checked = settings.performance.use_gpu || false;
+            document.getElementById('use_mixed_precision').checked = settings.performance.use_mixed_precision || false;
+            document.getElementById('cache_size').value = settings.performance.cache_size || 1024;
+            document.getElementById('memory_threshold').value = settings.performance.memory_threshold || 80;
+            document.getElementById('enable_compression').checked = settings.performance.enable_compression || false;
+            document.getElementById('stream_processing').checked = settings.performance.stream_processing || false;
+            
+            // Обновление отображаемых значений
+            document.getElementById('similarity_threshold_value').textContent = document.getElementById('similarity_threshold').value;
+            document.getElementById('confidence_threshold_value').textContent = document.getElementById('confidence_threshold').value;
+            document.getElementById('group_size_threshold_value').textContent = document.getElementById('group_size_threshold').value;
+            document.getElementById('n_clusters_value').textContent = document.getElementById('n_clusters').value;
+            document.getElementById('eps_value').textContent = document.getElementById('eps').value;
+            document.getElementById('min_samples_value').textContent = document.getElementById('min_samples').value;
+            document.getElementById('denoising_level_value').textContent = document.getElementById('denoising_level').value;
+            document.getElementById('sharpening_level_value').textContent = document.getElementById('sharpening_level').value;
+            document.getElementById('contrast_level_value').textContent = document.getElementById('contrast_level').value;
+            document.getElementById('brightness_level_value').textContent = document.getElementById('brightness_level').value;
+            document.getElementById('num_workers_value').textContent = document.getElementById('num_workers').value;
+            document.getElementById('batch_size_value').textContent = document.getElementById('batch_size').value;
+            document.getElementById('cache_size_value').textContent = document.getElementById('cache_size').value;
+            document.getElementById('memory_threshold_value').textContent = document.getElementById('memory_threshold').value;
+        }
+    } catch (error) {
+        console.error('Error loading settings:', error);
+    }
+}
+
+// Сохранение настроек
+async function saveSettings() {
+    const settings = {
+        stage1: {
+            similarity_algorithm: document.getElementById('similarity_algorithm').value,
+            secondary_algorithm: document.getElementById('secondary_algorithm').value,
+            use_ensemble: document.getElementById('use_ensemble').checked,
+            similarity_threshold: parseFloat(document.getElementById('similarity_threshold').value),
+            confidence_threshold: parseFloat(document.getElementById('confidence_threshold').value),
+            group_size_threshold: parseInt(document.getElementById('group_size_threshold').value)
+        },
+        stage2: {
+            clustering_algorithm: document.getElementById('clustering_algorithm').value,
+            feature_extraction: document.getElementById('feature_extraction').value,
+            auto_detect_issues: document.getElementById('auto_detect_issues').checked,
+            n_clusters: parseInt(document.getElementById('n_clusters').value),
+            eps: parseFloat(document.getElementById('eps').value),
+            min_samples: parseInt(document.getElementById('min_samples').value),
+            linkage: document.getElementById('linkage').value
+        },
+        preprocessing: {
+            resize_width: parseInt(document.getElementById('resize_width').value),
+            resize_height: parseInt(document.getElementById('resize_height').value),
+            maintain_aspect_ratio: document.getElementById('maintain_aspect_ratio').checked,
+            convert_grayscale: document.getElementById('convert_grayscale').checked,
+            denoising_level: parseInt(document.getElementById('denoising_level').value),
+            sharpening_level: parseFloat(document.getElementById('sharpening_level').value),
+            contrast_level: parseFloat(document.getElementById('contrast_level').value),
+            brightness_level: parseFloat(document.getElementById('brightness_level').value)
+        },
+        performance: {
+            num_workers: parseInt(document.getElementById('num_workers').value),
+            batch_size: parseInt(document.getElementById('batch_size').value),
+            use_gpu: document.getElementById('use_gpu').checked,
+            use_mixed_precision: document.getElementById('use_mixed_precision').checked,
+            cache_size: parseInt(document.getElementById('cache_size').value),
+            memory_threshold: parseInt(document.getElementById('memory_threshold').value),
+            enable_compression: document.getElementById('enable_compression').checked,
+            stream_processing: document.getElementById('stream_processing').checked
+        }
+    };
+
+    try {
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(settings)
+        });
+
+        if (response.ok) {
+            showNotification('Настройки успешно сохранены!');
+        } else {
+            const data = await response.json();
+            showNotification('Ошибка: ' + data.detail, 'danger');
+        }
+    } catch (error) {
+        showNotification('Ошибка сети: ' + error.message, 'danger');
+    }
+}
+
+// Сброс настроек к значениям по умолчанию
+function loadDefaults() {
+    if (confirm('Сбросить все настройки к значениям по умолчанию?')) {
+        // Установка значений по умолчанию
+        document.getElementById('similarity_algorithm').value = 'phash';
+        document.getElementById('secondary_algorithm').value = '';
+        document.getElementById('use_ensemble').checked = false;
+        document.getElementById('similarity_threshold').value = 0.90;
+        document.getElementById('confidence_threshold').value = 0.85;
+        document.getElementById('group_size_threshold').value = 2;
+        
+        document.getElementById('clustering_algorithm').value = 'kmeans';
+        document.getElementById('feature_extraction').value = 'cnn';
+        document.getElementById('auto_detect_issues').checked = false;
+        document.getElementById('n_clusters').value = 5;
+        document.getElementById('eps').value = 0.5;
+        document.getElementById('min_samples').value = 5;
+        document.getElementById('linkage').value = 'ward';
+        
+        document.getElementById('resize_width').value = 224;
+        document.getElementById('resize_height').value = 224;
+        document.getElementById('maintain_aspect_ratio').checked = false;
+        document.getElementById('convert_grayscale').checked = false;
+        document.getElementById('denoising_level').value = 10;
+        document.getElementById('sharpening_level').value = 1.0;
+        document.getElementById('contrast_level').value = 1.0;
+        document.getElementById('brightness_level').value = 0.0;
+        
+        document.getElementById('num_workers').value = 4;
+        document.getElementById('batch_size').value = 32;
+        document.getElementById('use_gpu').checked = false;
+        document.getElementById('use_mixed_precision').checked = false;
+        document.getElementById('cache_size').value = 1024;
+        document.getElementById('memory_threshold').value = 80;
+        document.getElementById('enable_compression').checked = false;
+        document.getElementById('stream_processing').checked = false;
+        
+        // Обновление отображаемых значений
+        document.getElementById('similarity_threshold_value').textContent = '0.90';
+        document.getElementById('confidence_threshold_value').textContent = '0.85';
+        document.getElementById('group_size_threshold_value').textContent = '2';
+        document.getElementById('n_clusters_value').textContent = '5';
+        document.getElementById('eps_value').textContent = '0.5';
+        document.getElementById('min_samples_value').textContent = '5';
+        document.getElementById('denoising_level_value').textContent = '10';
+        document.getElementById('sharpening_level_value').textContent = '1.0';
+        document.getElementById('contrast_level_value').textContent = '1.0';
+        document.getElementById('brightness_level_value').textContent = '0.0';
+        document.getElementById('num_workers_value').textContent = '4';
+        document.getElementById('batch_size_value').textContent = '32';
+        document.getElementById('cache_size_value').textContent = '1024';
+        document.getElementById('memory_threshold_value').textContent = '80';
+    }
+}
+
+// Показ уведомления
+function showNotification(message, type = 'success') {
+    const notification = document.getElementById('notification');
+    notification.className = `alert alert-${type} d-block`;
+    notification.textContent = message;
+    
+    // Скрытие уведомления через 5 секунд
+    setTimeout(() => {
+        notification.className = 'alert alert-success d-none';
+    }, 5000);
+}
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadSettings();
+});
+</script>
+{% endblock %}

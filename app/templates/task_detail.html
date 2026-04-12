@@ -1,0 +1,536 @@
+{% extends "base.html" %}
+
+{% block title %}Задача: {{ task.title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1>{{ task.title }}</h1>
+        <p class="text-muted">{{ task.description }}</p>
+    </div>
+    <div class="btn-group" role="group">
+        {% if task.status == 'pending' and task.owner_id == current_user.id %}
+        <button class="btn btn-primary" onclick="startProcessing({{ task.id }})">
+            <i class="bi bi-play"></i> Начать обработку
+        </button>
+        {% endif %}
+        
+        {% if task.status == 'completed' and not task.validated_at and current_user.is_superuser %}
+        <button class="btn btn-success" onclick="validateTask({{ task.id }})">
+            <i class="bi bi-check2"></i> Подтвердить выполнение
+        </button>
+        {% endif %}
+        
+        <button class="btn btn-outline-secondary" onclick="window.history.back()">
+            <i class="bi bi-arrow-left"></i> Назад
+        </button>
+    </div>
+</div>
+
+<!-- Информационные панели -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">{{ task.total_images }}</h5>
+                <p class="card-text text-muted">Всего изображений</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">{{ task.progress }}</h5>
+                <p class="card-text text-muted">Обработано</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">{{ (task.progress / task.total_images * 100)|int }}%</h5>
+                <p class="card-text text-muted">Прогресс</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">{{ task.stage_name }}</h5>
+                <p class="card-text text-muted">Этап обработки</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Прогресс-бар -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between mb-2">
+            <small>Прогресс обработки</small>
+            <small>{{ task.progress }} / {{ task.total_images }} изображений</small>
+        </div>
+        <div class="progress" style="height: 20px;">
+            <div class="progress-bar bg-success" role="progressbar" 
+                 style="width: {{ (task.progress / task.total_images * 100) if task.total_images > 0 else 0 }}%" 
+                 aria-valuenow="{{ (task.progress / task.total_images * 100) if task.total_images > 0 else 0 }}" 
+                 aria-valuemin="0" aria-valuemax="100">
+                {{ (task.progress / task.total_images * 100)|int }}%
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Детали задачи -->
+<div class="card mb-4">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">Детали задачи</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label class="form-label"><i class="bi bi-person"></i> Владелец</label>
+                    <div class="fw-medium">{{ task.owner.username }}</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label"><i class="bi bi-calendar"></i> Создана</label>
+                    <div class="fw-medium">{{ task.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label"><i class="bi bi-check2-circle"></i> Статус</label>
+                    <div>
+                        <span class="badge bg-{{ 'success' if task.status == 'validated' else 'primary' if task.status == 'completed' else 'warning' if task.status == 'in_progress' else 'secondary' }}">
+                            {{ {'pending': 'Ожидание', 'in_progress': 'В процессе', 'completed': 'Завершено', 'validated': 'Подтверждено'}[task.status] }}
+                        </span>
+                        {% if task.validated_at %}
+                        <small class="text-muted ms-2">{{ task.validated_at.strftime('%d.%m.%Y %H:%M') }}</small>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label class="form-label"><i class="bi bi-folder"></i> Входная директория</label>
+                    <div class="fw-medium text-break">{{ task.input_path }}</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label"><i class="bi bi-folder2-open"></i> Выходная директория</label>
+                    <div class="fw-medium text-break">{{ task.output_path }}</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label"><i class="bi bi-gear"></i> Конфигурация</label>
+                    <div class="fw-medium">{{ task.config_name or 'По умолчанию' }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Действия -->
+<div class="card mb-4">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">Действия</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Управление задачей</h6>
+                
+                <div class="d-grid gap-2">
+                    {% if task.status == 'pending' and task.owner_id == current_user.id %}
+                    <button class="btn btn-primary" onclick="startProcessing({{ task.id }})">
+                        <i class="bi bi-play"></i> Начать обработку
+                    </button>
+                    {% endif %}
+                    
+                    {% if task.status == 'in_progress' %}
+                    <button class="btn btn-warning" onclick="pauseProcessing({{ task.id }})">
+                        <i class="bi bi-pause"></i> Приостановить обработку
+                    </button>
+                    {% endif %}
+                    
+                    {% if task.status == 'completed' and not task.validated_at and current_user.is_superuser %}
+                    <button class="btn btn-success" onclick="validateTask({{ task.id }})">
+                        <i class="bi bi-check2"></i> Подтвердить выполнение
+                    </button>
+                    {% endif %}
+                    
+                    {% if task.status not in ['completed', 'validated'] %}
+                    <button class="btn btn-danger" onclick="cancelTask({{ task.id }})">
+                        <i class="bi bi-x-circle"></i> Отменить задачу
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <h6>Дополнительные действия</h6>
+                
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary" onclick="viewLogs({{ task.id }})">
+                        <i class="bi bi-file-text"></i> Просмотреть логи
+                    </button>
+                    
+                    <button class="btn btn-outline-primary" onclick="downloadResults({{ task.id }})">
+                        <i class="bi bi-download"></i> Скачать результаты
+                    </button>
+                    
+                    {% if current_user.is_superuser %}
+                    <button class="btn btn-outline-danger" onclick="deleteTask({{ task.id }})">
+                        <i class="bi bi-trash"></i> Удалить задачу
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Промежуточные результаты -->
+<div class="card">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Промежуточные результаты</h5>
+        <div class="btn-group" role="group">
+            <button class="btn btn-sm btn-outline-secondary" onclick="refreshResults()">
+                <i class="bi bi-arrow-clockwise"></i> Обновить
+            </button>
+            {% if task.stage == 1 %}
+            <button class="btn btn-sm btn-primary" onclick="viewDuplicates()">
+                <i class="bi bi-search"></i> Просмотреть дубликаты
+            </button>
+            {% elif task.stage == 2 %}
+            <button class="btn btn-sm btn-primary" onclick="viewIssues()">
+                <i class="bi bi-diagram-3"></i> Просмотреть выпуски
+            </button>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <!-- Статистика по этапу 1 -->
+            {% if task.stage == 1 %}
+            <div class="col-md-4">
+                <div class="text-center p-3 border rounded">
+                    <div class="h4 mb-1 text-primary">{{ stats.duplicate_groups or 0 }}</div>
+                    <div class="small text-muted">Групп дубликатов</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center p-3 border rounded">
+                    <div class="h4 mb-1 text-warning">{{ stats.duplicate_images or 0 }}</div>
+                    <div class="small text-muted">Дублирующихся изображений</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center p-3 border rounded">
+                    <div class="h4 mb-1 text-success">{{ stats.unique_images or 0 }}</div>
+                    <div class="small text-muted">Уникальных изображений</div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Статистика по этапу 2 -->
+            {% if task.stage == 2 %}
+            <div class="col-md-4">
+                <div class="text-center p-3 border rounded">
+                    <div class="h4 mb-1 text-primary">{{ stats.issues or 0 }}</div>
+                    <div class="small text-muted">Выпусков</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center p-3 border rounded">
+                    <div class="h4 mb-1 text-info">{{ stats.images_in_issues or 0 }}</div>
+                    <div class="small text-muted">Изображений в выпусках</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center p-3 border rounded">
+                    <div class="h4 mb-1 text-danger">{{ stats.unassigned_images or 0 }}</div>
+                    <div class="small text-muted">Не распределено</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- График прогресса -->
+        <div class="mt-4">
+            <h6>Динамика обработки</h6>
+            <canvas id="progressChart" height="100"></canvas>
+        </div>
+        
+        <!-- Последние события -->
+        <div class="mt-4">
+            <h6>Последние события</h6>
+            <div class="list-group list-group-flush">
+                {% for event in recent_events %}
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted">{{ event.timestamp.strftime('%H:%M:%S') }}</small>
+                        <div class="fw-medium">{{ event.message }}</div>
+                    </div>
+                    <span class="badge bg-{{ 'primary' if event.level == 'INFO' else 'warning' if event.level == 'WARNING' else 'danger' }} rounded-pill">
+                        {{ event.level }}
+                    </span>
+                </div>
+                {% else %}
+                <div class="list-group-item text-center text-muted">
+                    <i class="bi bi-info-circle"></i> События отсутствуют
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const taskId = {{ task.id }};
+let chart = null;
+
+// Запуск обработки задачи
+async function startProcessing(taskId) {
+    if (!confirm('Начать обработку задачи?')) return;
+    
+    try {
+        const response = await fetch(`/images/${taskId}/process`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            showNotification('Обработка начата!');
+            location.reload();
+        } else {
+            const data = await response.json();
+            showNotification('Ошибка: ' + data.detail, 'danger');
+        }
+    } catch (error) {
+        showNotification('Ошибка сети: ' + error.message, 'danger');
+    }
+}
+
+// Приостановка обработки задачи
+async function pauseProcessing(taskId) {
+    if (!confirm('Приостановить обработку задачи?')) return;
+    
+    try {
+        const response = await fetch(`/tasks/${taskId}/pause`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            showNotification('Обработка приостановлена!');
+            location.reload();
+        } else {
+            const data = await response.json();
+            showNotification('Ошибка: ' + data.detail, 'danger');
+        }
+    } catch (error) {
+        showNotification('Ошибка сети: ' + error.message, 'danger');
+    }
+}
+
+// Подтверждение выполнения задачи
+async function validateTask(taskId) {
+    if (!confirm('Подтвердить выполнение задачи?')) return;
+    
+    try {
+        const response = await fetch(`/tasks/${taskId}/validate`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            showNotification('Задача подтверждена!');
+            location.reload();
+        } else {
+            const data = await response.json();
+            showNotification('Ошибка: ' + data.detail, 'danger');
+        }
+    } catch (error) {
+        showNotification('Ошибка сети: ' + error.message, 'danger');
+    }
+}
+
+// Отмена задачи
+async function cancelTask(taskId) {
+    if (!confirm('Отменить задачу? Все результаты будут удалены.')) return;
+    
+    try {
+        const response = await fetch(`/tasks/${taskId}/cancel`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            showNotification('Задача отменена!');
+            window.location.href = '/tasks';
+        } else {
+            const data = await response.json();
+            showNotification('Ошибка: ' + data.detail, 'danger');
+        }
+    } catch (error) {
+        showNotification('Ошибка сети: ' + error.message, 'danger');
+    }
+}
+
+// Удаление задачи
+async function deleteTask(taskId) {
+    if (!confirm('Удалить задачу? Это действие нельзя отменить.')) return;
+    
+    try {
+        const response = await fetch(`/tasks/${taskId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            showNotification('Задача удалена!');
+            window.location.href = '/tasks';
+        } else {
+            const data = await response.json();
+            showNotification('Ошибка: ' + data.detail, 'danger');
+        }
+    } catch (error) {
+        showNotification('Ошибка сети: ' + error.message, 'danger');
+    }
+}
+
+// Просмотр логов
+function viewLogs(taskId) {
+    window.open(`/tasks/${taskId}/logs`, '_blank');
+}
+
+// Скачивание результатов
+function downloadResults(taskId) {
+    window.open(`/tasks/${taskId}/download`, '_blank');
+}
+
+// Просмотр дубликатов
+function viewDuplicates() {
+    window.location.href = `/validation/stage1/${taskId}`;
+}
+
+// Просмотр выпусков
+function viewIssues() {
+    window.location.href = `/validation/stage2/${taskId}`;
+}
+
+// Обновление результатов
+async function refreshResults() {
+    try {
+        const response = await fetch(`/api/tasks/${taskId}/status`);
+        
+        if (response.ok) {
+            const data = await response.json();
+            
+            // Обновление статистики
+            document.querySelector('.card-title').textContent = data.progress;
+            
+            if (data.stage === 1) {
+                document.querySelectorAll('.text-primary')[0].textContent = data.stats.duplicate_groups || 0;
+                document.querySelectorAll('.text-warning')[0].textContent = data.stats.duplicate_images || 0;
+                document.querySelectorAll('.text-success')[0].textContent = data.stats.unique_images || 0;
+            } else if (data.stage === 2) {
+                document.querySelectorAll('.text-primary')[0].textContent = data.stats.issues || 0;
+                document.querySelectorAll('.text-info')[0].textContent = data.stats.images_in_issues || 0;
+                document.querySelectorAll('.text-danger')[0].textContent = data.stats.unassigned_images || 0;
+            }
+            
+            // Обновление прогресс-бара
+            const progress = data.progress / data.total_images * 100;
+            const progressBar = document.querySelector('.progress-bar');
+            progressBar.style.width = progress + '%';
+            progressBar.textContent = Math.round(progress) + '%';
+            
+            // Обновление графика
+            updateChart(data.progress_history);
+            
+            showNotification('Результаты обновлены!');
+        }
+    } catch (error) {
+        showNotification('Ошибка обновления: ' + error.message, 'danger');
+    }
+}
+
+// Инициализация графика
+function initChart() {
+    const ctx = document.getElementById('progressChart').getContext('2d');
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Обработано изображений',
+                data: [],
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1,
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Обновление графика
+function updateChart(history) {
+    if (!chart) return;
+    
+    const labels = history.map(item => new Date(item.timestamp).toLocaleTimeString());
+    const data = history.map(item => item.progress);
+    
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = data;
+    chart.update();
+}
+
+// Показ уведомления
+function showNotification(message, type = 'success') {
+    // Создаем элемент уведомления
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+    alert.style.zIndex = '1000';
+    alert.role = 'alert';
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(alert);
+    
+    // Удаляем через 5 секунд
+    setTimeout(() => {
+        alert.remove();
+    }, 5000);
+}
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    initChart();
+    updateChart({{ progress_history|tojson }});
+});
+</script>
+{% endblock %}

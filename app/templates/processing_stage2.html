@@ -1,0 +1,527 @@
+{% extends "base.html" %}
+
+{% block title %}Обработка - Этап 2: Кластеризация по выпускам - {{ task.title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1>Этап 2: Кластеризация по выпускам</h1>
+        <p class="text-muted">Задача: {{ task.title }}</p>
+    </div>
+    <div class="text-end">
+        <div class="btn-group" role="group">
+            <button class="btn btn-outline-secondary" onclick="navigateGroup('prev')">
+                <i class="bi bi-arrow-left"></i> Предыдущая
+            </button>
+            <button class="btn btn-outline-secondary" onclick="navigateGroup('next')">
+                Следующая <i class="bi bi-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Прогресс обработки -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="text-center">
+                    <div class="h4 mb-0">{{ progress.current }}</div>
+                    <small class="text-muted">Группа {{ progress.current }} из {{ progress.total }}</small>
+                </div>
+            </div>
+            <div class="col-md-9">
+                <div class="d-flex justify-content-between mb-1">
+                    <small>Общий прогресс</small>
+                    <small>{{ (progress.current / progress.total * 100)|int }}%</small>
+                </div>
+                <div class="progress" style="height: 6px;">
+                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ progress.current / progress.total * 100 }}%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Панель управления выпусками -->
+<div class="card mb-4">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Выпуски</h5>
+        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createIssueModal">
+            <i class="bi bi-plus-lg"></i> Создать выпуск
+        </button>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <!-- Список выпусков -->
+            <div class="col-md-4">
+                <div class="list-group">
+                    {% for issue in issues %}
+                    <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center issue-item {% if issue.id == current_issue.id %}active{% endif %}" 
+                       data-issue-id="{{ issue.id }}" onclick="selectIssue({{ issue.id }})">
+                        <div>
+                            <strong>{{ issue.name }}</strong>
+                            <div class="small text-muted">{{ issue.images|length }} изображений</div>
+                        </div>
+                        <span class="badge bg-secondary rounded-pill">{{ issue.images|length }}</span>
+                    </a>
+                    {% endfor %}
+                    {% if issues|length == 0 %}
+                    <div class="list-group-item text-center text-muted">
+                        <i class="bi bi-folder-plus"></i> Нет созданных выпусков
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Контент выбранного выпуска -->
+            <div class="col-md-8">
+                <div id="issueContent">
+                    {% if current_issue %}
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">{{ current_issue.name }}</h6>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteIssue({{ current_issue.id }})">
+                                    <i class="bi bi-trash"></i> Удалить
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <!-- Сетка изображений выпуска -->
+                            <div class="row g-2">
+                                {% for image in current_issue.images %}
+                                <div class="col-6 col-md-4 col-lg-3">
+                                    <div class="card h-100">
+                                        <img src="{{ image.path }}" class="card-img-top" alt="Изображение" style="height: 120px; object-fit: contain; background: #f8f9fa;">
+                                        <div class="card-body p-2">
+                                            <small class="text-muted">{{ image.filename[:15] }}{% if image.filename|length > 15 %}...{% endif %}</small>
+                                            <button class="btn btn-sm btn-outline-danger w-100 mt-1" 
+                                                    onclick="removeFromIssue({{ image.id }}, {{ current_issue.id }})">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                                {% if current_issue.images|length == 0 %}
+                                <div class="col-12 text-center text-muted">
+                                    <i class="bi bi-images"></i> Нет изображений в выпуске
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-folder2-open" style="font-size: 3rem;"></i>
+                        <p class="mt-3">Выберите выпуск для просмотра содержимого</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Группа для сопоставления -->
+<div class="card">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">Группа для сопоставления #{{ current_group.id }}</h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted mb-4">
+            Обнаружено {{ current_group.images|length }} изображений, которые необходимо распределить по выпускам.
+            Перетащите изображения в нужные выпуски или создайте новый выпуск.
+        </p>
+
+        <!-- Сетка изображений для сопоставления -->
+        <div class="row g-3" id="matchingImages">
+            {% for image in current_group.images %}
+            <div class="col-6 col-md-4 col-lg-3">
+                <div class="card h-100 draggable-image" draggable="true" data-image-id="{{ image.id }}">
+                    <img src="{{ image.path }}" class="card-img-top" alt="Изображение" style="height: 200px; object-fit: contain; background: #f8f9fa;">
+                    <div class="card-body p-2">
+                        <small class="text-muted">{{ image.filename }}</small>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Действия -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="confirm_all">
+                            <label class="form-check-label" for="confirm_all">
+                                Подтвердить распределение всех изображений
+                            </label>
+                        </div>
+                    </div>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-outline-secondary" onclick="cancelProcessing()">Отмена</button>
+                        <button class="btn btn-primary" onclick="saveGroup()">Сохранить и следующая</button>
+                        <button class="btn btn-success" onclick="completeProcessing()">Завершить этап</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно создания выпуска -->
+<div class="modal fade" id="createIssueModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Создать выпуск</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="issueName" class="form-label">Название выпуска</label>
+                    <input type="text" class="form-control" id="issueName" placeholder="Например: Выпуск 1 - Январь 2024">
+                    <div class="form-text">Рекомендуется использовать формат: "Выпуск N - Месяц Год"</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="createIssue()">Создать</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const taskId = {{ task.id }};
+const groupId = {{ current_group.id }};
+let currentIssueId = {{ current_issue.id if current_issue else 'null' }};
+
+// Инициализация drag and drop
+function initDragAndDrop() {
+    // Элементы, которые можно перетаскивать
+    const draggableElements = document.querySelectorAll('.draggable-image');
+    draggableElements.forEach(element => {
+        element.addEventListener('dragstart', dragStart);
+    });
+
+    // Целевые области (выпуски)
+    const issueItems = document.querySelectorAll('.issue-item');
+    issueItems.forEach(item => {
+        item.addEventListener('dragover', dragOver);
+        item.addEventListener('drop', drop);
+    });
+
+    // Область содержимого выпуска
+    const issueContent = document.getElementById('issueContent');
+    issueContent.addEventListener('dragover', dragOver);
+    issueContent.addEventListener('drop', drop);
+});
+
+function dragStart(e) {
+    e.dataTransfer.setData('text/plain', e.target.closest('.draggable-image').dataset.imageId);
+    e.target.closest('.draggable-image').style.opacity = '0.4';
+}
+
+function dragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+}
+
+function drop(e) {
+    e.preventDefault();
+    
+    const imageId = e.dataTransfer.getData('text/plain');
+    const draggedElement = document.querySelector(`[data-image-id="${imageId}"]`).closest('.draggable-image');
+    draggedElement.style.opacity = '1';
+
+    // Определяем, куда бросили
+    let targetIssueId = null;
+    
+    if (e.target.closest('.issue-item')) {
+        targetIssueId = e.target.closest('.issue-item').dataset.issueId;
+    } else if (e.target.closest('[data-issue-id]')) {
+        targetIssueId = e.target.closest('[data-issue-id]').dataset.issueId;
+    }
+
+    if (targetIssueId) {
+        addToIssue(imageId, targetIssueId);
+    }
+}
+
+// Выбор выпуска
+function selectIssue(issueId) {
+    document.querySelectorAll('.issue-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    document.querySelector(`[data-issue-id="${issueId}"]`).classList.add('active');
+    
+    currentIssueId = issueId;
+    loadIssueContent(issueId);
+}
+
+// Загрузка содержимого выпуска
+async function loadIssueContent(issueId) {
+    try {
+        const response = await fetch(`/processing/stage2/${taskId}/issue/${issueId}`);
+        if (response.ok) {
+            const content = await response.text();
+            document.getElementById('issueContent').innerHTML = content;
+        }
+    } catch (error) {
+        console.error('Error loading issue content:', error);
+    }
+}
+
+// Добавление изображения в выпуск
+async function addToIssue(imageId, issueId) {
+    try {
+        const response = await fetch(`/processing/stage2/${taskId}/issue/${issueId}/add`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                image_id: parseInt(imageId)
+            })
+        });
+
+        if (response.ok) {
+            // Удаляем изображение из группы сопоставления
+            document.querySelector(`[data-image-id="${imageId}"]`).closest('.col-6').remove();
+            
+            // Обновляем содержимое выпуска
+            if (issueId == currentIssueId) {
+                loadIssueContent(issueId);
+            }
+            
+            // Обновляем счетчик выпуска
+            updateIssueBadge(issueId);
+        } else {
+            const data = await response.json();
+            alert('Ошибка: ' + data.detail);
+        }
+    } catch (error) {
+        alert('Ошибка сети: ' + error.message);
+    }
+}
+
+// Удаление изображения из выпуска
+async function removeFromIssue(imageId, issueId) {
+    if (!confirm('Удалить изображение из выпуска?')) return;
+    
+    try {
+        const response = await fetch(`/processing/stage2/${taskId}/issue/${issueId}/remove`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                image_id: parseInt(imageId)
+            })
+        });
+
+        if (response.ok) {
+            // Добавляем изображение обратно в группу сопоставления
+            const matchingImages = document.getElementById('matchingImages');
+            const image = {{ current_group.images|tojson|safe }}.find(img => img.id == imageId);
+            
+            const col = document.createElement('div');
+            col.className = 'col-6 col-md-4 col-lg-3';
+            col.innerHTML = `
+                <div class="card h-100 draggable-image" draggable="true" data-image-id="${image.id}">
+                    <img src="${image.path}" class="card-img-top" alt="Изображение" style="height: 200px; object-fit: contain; background: #f8f9fa;">
+                    <div class="card-body p-2">
+                        <small class="text-muted">${image.filename}</small>
+                    </div>
+                </div>
+            `;
+            matchingImages.appendChild(col);
+            
+            // Обновляем содержимое выпуска
+            if (issueId == currentIssueId) {
+                loadIssueContent(issueId);
+            }
+            
+            // Обновляем счетчик выпуска
+            updateIssueBadge(issueId);
+            
+            // Перестраиваем drag and drop
+            initDragAndDrop();
+        } else {
+            const data = await response.json();
+            alert('Ошибка: ' + data.detail);
+        }
+    } catch (error) {
+        alert('Ошибка сети: ' + error.message);
+    }
+}
+
+// Создание нового выпуска
+async function createIssue() {
+    const issueName = document.getElementById('issueName').value.trim();
+    if (!issueName) {
+        alert('Введите название выпуска');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/processing/stage2/${taskId}/issue`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: issueName
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            
+            // Добавляем новый выпуск в список
+            const listGroup = document.querySelector('.list-group');
+            const item = document.createElement('a');
+            item.href = '#';
+            item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center issue-item';
+            item.dataset.issueId = data.id;
+            item.onclick = () => selectIssue(data.id);
+            item.innerHTML = `
+                <div>
+                    <strong>${data.name}</strong>
+                    <div class="small text-muted">0 изображений</div>
+                </div>
+                <span class="badge bg-secondary rounded-pill">0</span>
+            `;
+            listGroup.appendChild(item);
+            
+            // Закрываем модальное окно
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createIssueModal'));
+            modal.hide();
+            
+            // Очищаем поле ввода
+            document.getElementById('issueName').value = '';
+            
+            // Выбираем новый выпуск
+            selectIssue(data.id);
+        } else {
+            const data = await response.json();
+            alert('Ошибка: ' + data.detail);
+        }
+    } catch (error) {
+        alert('Ошибка сети: ' + error.message);
+    }
+}
+
+// Удаление выпуска
+async function deleteIssue(issueId) {
+    if (!confirm('Удалить выпуск? Все изображения будут возвращены в группу сопоставления.')) return;
+    
+    try {
+        const response = await fetch(`/processing/stage2/${taskId}/issue/${issueId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            // Удаляем из списка
+            document.querySelector(`[data-issue-id="${issueId}"]`).remove();
+            
+            // Очищаем содержимое, если это был текущий выпуск
+            if (issueId == currentIssueId) {
+                document.getElementById('issueContent').innerHTML = `
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-folder2-open" style="font-size: 3rem;"></i>
+                        <p class="mt-3">Выберите выпуск для просмотра содержимого</p>
+                    </div>
+                `;
+                currentIssueId = null;
+            }
+        } else {
+            const data = await response.json();
+            alert('Ошибка: ' + data.detail);
+        }
+    } catch (error) {
+        alert('Ошибка сети: ' + error.message);
+    }
+}
+
+// Обновление счетчика выпуска
+function updateIssueBadge(issueId) {
+    // Этот метод будет реализован на бэкенде
+    // Пока что обновляем вручную при необходимости
+}
+
+// Навигация между группами
+function navigateGroup(direction) {
+    window.location.href = `/processing/stage2/${taskId}?group_id=${direction}`;
+}
+
+// Отмена обработки
+function cancelProcessing() {
+    if (confirm('Отменить обработку? Все изменения будут потеряны.')) {
+        window.location.href = `/tasks/${taskId}`;
+    }
+}
+
+// Сохранение текущей группы
+async function saveGroup() {
+    try {
+        const response = await fetch(`/processing/stage2/${taskId}/group/${groupId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'save'
+            })
+        });
+
+        if (response.ok) {
+            navigateGroup('next');
+        } else {
+            const data = await response.json();
+            alert('Ошибка: ' + data.detail);
+        }
+    } catch (error) {
+        alert('Ошибка сети: ' + error.message);
+    }
+}
+
+// Завершение этапа
+async function completeProcessing() {
+    if (!confirm('Завершить второй этап обработки?')) return;
+
+    try {
+        const response = await fetch(`/processing/stage2/${taskId}/complete`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            alert('Второй этап обработки завершен!');
+            window.location.href = `/tasks/${taskId}`;
+        } else {
+            const data = await response.json();
+            alert('Ошибка: ' + data.detail);
+        }
+    } catch (error) {
+        alert('Ошибка сети: ' + error.message);
+    }
+}
+
+// Обработка чекбокса "Подтвердить все"
+document.getElementById('confirm_all').addEventListener('change', function() {
+    // Реализация будет зависеть от конкретных требований
+    console.log('Confirm all toggled:', this.checked);
+});
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    initDragAndDrop();
+});
+</script>
+{% endblock %}
