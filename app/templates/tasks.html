@@ -20,23 +20,23 @@
                 <label class="form-label">Статус</label>
                 <select name="status" class="form-select">
                     <option value="">Все</option>
-                    <option value="pending" {% if request.args.get('status') == 'pending' %}selected{% endif %}>Ожидание</option>
-                    <option value="in_progress" {% if request.args.get('status') == 'in_progress' %}selected{% endif %}>В процессе</option>
-                    <option value="completed" {% if request.args.get('status') == 'completed' %}selected{% endif %}>Завершено</option>
-                    <option value="validated" {% if request.args.get('status') == 'validated' %}selected{% endif %}>Подтверждено</option>
+                    <option value="pending" {% if status == 'pending' %}selected{% endif %}>Ожидание</option>
+                    <option value="in_progress" {% if status == 'in_progress' %}selected{% endif %}>В процессе</option>
+                    <option value="completed" {% if status == 'completed' %}selected{% endif %}>Завершено</option>
+                    <option value="validated" {% if status == 'validated' %}selected{% endif %}>Подтверждено</option>
                 </select>
             </div>
             <div class="col-md-3">
                 <label class="form-label">Этап</label>
                 <select name="stage" class="form-select">
                     <option value="">Все</option>
-                    <option value="1" {% if request.args.get('stage') == '1' %}selected{% endif %}>Поиск дубликатов</option>
-                    <option value="2" {% if request.args.get('stage') == '2' %}selected{% endif %}>Группировка по выпускам</option>
+                    <option value="1" {% if stage == '1' %}selected{% endif %}>Поиск дубликатов</option>
+                    <option value="2" {% if stage == '2' %}selected{% endif %}>Группировка по выпускам</option>
                 </select>
             </div>
             <div class="col-md-3">
                 <label class="form-label">Поиск</label>
-                <input type="text" name="q" class="form-control" placeholder="Название задачи..." value="{{ request.args.get('q', '') }}">
+                <input type="text" name="q" class="form-control" placeholder="Название задачи..." value="{{ q }}">
             </div>
             <div class="col-md-3 d-flex align-items-end">
                 <button type="submit" class="btn btn-outline-secondary w-100">Фильтровать</button>
@@ -111,17 +111,17 @@
 <nav aria-label="Пагинация" class="mt-4">
     <ul class="pagination justify-content-center">
         <li class="page-item {% if page == 1 %}disabled{% endif %}">
-            <a class="page-link" href="?page={{ page - 1 }}&status={{ request.args.get('status', '') }}&stage={{ request.args.get('stage', '') }}&q={{ request.args.get('q', '') }}">Назад</a>
+            <a class="page-link" href="?page={{ page - 1 }}&status={{ status }}&stage={{ stage }}&q={{ q }}">Назад</a>
         </li>
         
         {% for p in range(1, total_pages + 1) %}
         <li class="page-item {% if p == page %}active{% endif %}">
-            <a class="page-link" href="?page={{ p }}&status={{ request.args.get('status', '') }}&stage={{ request.args.get('stage', '') }}&q={{ request.args.get('q', '') }}">{{ p }}</a>
+            <a class="page-link" href="?page={{ p }}&status={{ status }}&stage={{ stage }}&q={{ q }}">{{ p }}</a>
         </li>
         {% endfor %}
         
         <li class="page-item {% if page == total_pages %}disabled{% endif %}">
-            <a class="page-link" href="?page={{ page + 1 }}&status={{ request.args.get('status', '') }}&stage={{ request.args.get('stage', '') }}&q={{ request.args.get('q', '') }}">Вперед</a>
+            <a class="page-link" href="?page={{ page + 1 }}&status={{ status }}&stage={{ stage }}&q={{ q }}">Вперед</a>
         </li>
     </ul>
 </nav>

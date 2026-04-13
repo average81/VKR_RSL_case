@@ -259,4 +259,4 @@ class ProcessingService:
             
         except Exception as e:
             logger.error(f"Ошибка при запуске кластеризации для задачи {task_id}: {str(e)}")
-            raise"
+            raise

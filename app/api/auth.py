@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Form, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
+from starlette.responses import RedirectResponse
 import os
 
 from app import database, models
@@ -39,7 +40,7 @@ router = APIRouter(prefix="/auth")
 
 cpwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 def verify_password(plain_password, hashed_password):
     return cpwd_context.verify(plain_password, hashed_password)
@@ -70,7 +71,20 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     return encoded_jwt
 
 @router.get("/me", response_model=UserSchema)
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_current_user(request: Request, db: Session = Depends(get_db)):
+    # Получаем токен из cookie
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Убираем префикс "Bearer " если он есть
+    if token.startswith("Bearer "):
+        token = token[7:]
+    
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -89,28 +103,29 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise credentials_exception
     return user
 
-def get_current_active_user(current_user: models.User = Depends(get_current_user)):
+def get_current_active_user(request: Request, current_user: models.User = Depends(get_current_user)):
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
-def get_current_superuser(current_user: models.User = Depends(get_current_active_user)):
+def get_current_superuser(request: Request, current_user: models.User = Depends(get_current_active_user)):
     if not current_user.is_superuser:
         raise HTTPException(status_code=400, detail="The user doesn't have enough privileges")
     return current_user
 
 
-def check_group_leader(current_user: models.User = Depends(get_current_active_user)):
+def check_group_leader(request: Request, current_user: models.User = Depends(get_current_active_user)):
     if not current_user.is_group_leader:
         raise HTTPException(status_code=400, detail="The user doesn't have enough privileges")
     return current_user
 
 
-def check_task_access(current_user: models.User, task: models.Task) -> bool:
+def check_task_access(request: Request, current_user: models.User, task: models.Task) -> bool:
     """
     Проверяет права доступа к задаче.
     
     Args:
+        request: Объект запроса
         current_user: Текущий пользователь
         task: Задача для проверки доступа
     
@@ -122,7 +137,7 @@ def check_task_access(current_user: models.User, task: models.Task) -> bool:
         return True
     
     # Сотрудник имеет доступ только к своим задачам
-    return task.user_id == current_user.id
+    return task.owner_id == current_user.id
 
 @router.get("/login")
 def get_login_form(
@@ -142,20 +157,42 @@ def get_login_form(
         }
     )
 
-@router.post("/login", response_model=models.Token)
-def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@router.post("/login")
+def login_for_access_token(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(), 
+    db: Session = Depends(get_db)
+):
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
+        request.session["_flashes"] = [("error", "Неверное имя пользователя или пароль")]
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={
+                "request": request,
+                "current_user": None,
+                "flashes": [("error", "Неверное имя пользователя или пароль")]
+            }
         )
-    access_token_expires = timedelta(minutes=30)
+    
+    access_token_expires = timedelta(minutes=600)
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    
+    # Перенаправляем на главную страницу, которая сама перенаправит на задачи
+    response = RedirectResponse(url="/", status_code=303)
+    response.set_cookie(
+        key="access_token", 
+        value=f"Bearer {access_token}", 
+        httponly=True, 
+        max_age=600*60, 
+        expires=600*60,
+        secure=False,
+        samesite="lax"
+    )
+    return response
 
 @router.get("/register")
 def get_register_form(
@@ -184,6 +221,15 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
     db_user = get_user(db, username=user.username)
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
+    
+    # Проверяем, есть ли уже суперпользователи в системе
+    existing_superuser = db.query(models.User).filter(models.User.is_superuser == True).first()
+    if user.is_superuser and existing_superuser:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot create superuser: another superuser already exists"
+        )
+    
     hashed_password = get_password_hash(user.password)
     db_user = models.User(
         username=user.username,

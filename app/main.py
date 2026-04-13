@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -39,14 +39,20 @@ templates = Jinja2Templates(directory="app/templates")
 templates.env.globals["get_flashed_messages"] = get_flashed_messages
 
 # Подключаем API роутеры
-from app.api import auth#, tasks, images, grouping, processing
+from app.api import auth, tasks, images, grouping, processing
 
 app.include_router(auth.router, tags=["auth"])
-#app.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
+app.include_router(tasks.router, tags=["tasks"])
 #app.include_router(images.router, prefix="/images", tags=["images"])
 #app.include_router(grouping.router, prefix="/grouping", tags=["grouping"])
 #app.include_router(processing.router, prefix="/processing", tags=["processing"])
 
 @app.get("/")
-async def root():
+async def root(request: Request):
+    # Проверяем наличие токена в cookie
+    token = request.cookies.get("access_token")
+    if token:
+        # Если токен есть, перенаправляем на страницу задач
+        return RedirectResponse(url="/tasks")
+    # Если токена нет, перенаправляем на страницу входа
     return RedirectResponse(url="/auth/login")

@@ -6,7 +6,7 @@ from app.models.user import User
 from app.repository.task_repository import TaskRepository
 from app.repository.user_repository import UserRepository
 from app.exceptions import TaskNotFoundException, PermissionDeniedException, ValidationException
-from app.database import SessionLocal
+from app.models.enums import TaskStatus, TaskType, Role
 
 class TaskService:
     """
@@ -52,7 +52,8 @@ class TaskService:
             PermissionDeniedException: If creator doesn't have sufficient privileges
         """
         # Validate permissions - only admins and group leaders can create tasks
-        if created_by.role not in [Role.ADMIN, Role.GROUP_LEADER]:
+        if (hasattr(created_by, 'role') and created_by.role not in [Role.ADMIN, Role.GROUP_LEADER]) or \
+           (not hasattr(created_by, 'role') and not created_by.is_superuser):
             raise PermissionDeniedException("Only admins and group leaders can create tasks")
         
         # Create task
@@ -60,7 +61,7 @@ class TaskService:
             task_type=task_type,
             status=TaskStatus.PENDING,
             created_by=created_by.id,
-            assigned_to=assigned_to.id if assigned_to else None,
+            owner_id=assigned_to.id if assigned_to else None,
             description=description,
             created_at=datetime.utcnow()
         )
@@ -88,7 +89,8 @@ class TaskService:
             raise TaskNotFoundException(f"Task with id {task_id} not found")
         
         # Check permissions
-        if assigned_by.role not in [Role.ADMIN, Role.GROUP_LEADER]:
+        if (hasattr(assigned_by, 'role') and assigned_by.role not in [Role.ADMIN, Role.GROUP_LEADER]) or \
+           (not hasattr(assigned_by, 'role') and not assigned_by.is_superuser):
             # Regular users can only assign tasks they own
             if task.created_by != assigned_by.id:
                 raise PermissionDeniedException("Insufficient permissions to assign this task")
@@ -155,10 +157,11 @@ class TaskService:
         Returns:
             bool: True if user can modify the task, False otherwise
         """
-        if user.role == Role.ADMIN:
+        if (hasattr(user, 'role') and user.role == Role.ADMIN) or \
+           (not hasattr(user, 'role') and user.is_superuser):
             return True
         
-        if user.role == Role.GROUP_LEADER:
+        if (hasattr(user, 'role') and user.role == Role.GROUP_LEADER):
             # Group leaders can modify tasks they created or tasks assigned to their group members
             if task.created_by == user.id:
                 return True
@@ -168,7 +171,7 @@ class TaskService:
                 if assigned_user and assigned_user.created_by == user.id:
                     return True
             
-        else:  # Regular user
+        elif hasattr(user, 'role') and user.role == Role.USER:  # Regular user
             # Regular users can only modify tasks assigned to them
             return task.assigned_to == user.id
 
@@ -228,7 +231,7 @@ class TaskService:
         Returns:
             List[Task]: List of tasks with the specified status that the user has permission to view
         """
-        if user.role == Role.ADMIN:
+        if hasattr(user, 'role') and user.role == Role.ADMIN:
             return self.task_repo.get_tasks_by_status(status)
         
         # For non-admin users, get tasks they can access
@@ -250,9 +253,9 @@ class TaskService:
             return []
         
         # Check permissions
-        if user.role == Role.ADMIN:
+        if hasattr(user, 'role') and user.role == Role.ADMIN:
             return self.task_repo.get_tasks_by_user_id(user_id)
-        elif user.role == Role.GROUP_LEADER:
+        elif hasattr(user, 'role') and user.role == Role.GROUP_LEADER:
             # Group leaders can see tasks for their group members
             if target_user.created_by == user.id:
                 return self.task_repo.get_tasks_by_user_id(user_id)
@@ -340,7 +343,8 @@ class TaskService:
             PermissionDeniedException: If user doesn't have sufficient privileges
         """
         # Only admins and group leaders can start processing
-        if created_by.role not in [Role.ADMIN, Role.GROUP_LEADER]:
+        if (hasattr(created_by, 'role') and created_by.role not in [Role.ADMIN, Role.GROUP_LEADER]) or \
+           (not hasattr(created_by, 'role') and not created_by.is_superuser):
             raise PermissionDeniedException("Only admins and group leaders can start processing")
         
         return self.create_task(
@@ -369,7 +373,8 @@ class TaskService:
             raise TaskNotFoundException(f"Task with id {task_id} not found")
         
         # Only admins and group leaders can validate task completion
-        if validator.role not in [Role.ADMIN, Role.GROUP_LEADER]:
+        if (hasattr(validator, 'role') and validator.role not in [Role.ADMIN, Role.GROUP_LEADER]) or \
+           (not hasattr(validator, 'role') and not validator.is_superuser):
             raise PermissionDeniedException("Only admins and group leaders can validate task completion")
         
         # For two-stage processing tasks, validate that both stages completed successfully

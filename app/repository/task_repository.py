@@ -98,7 +98,7 @@ class TaskRepository:
         Returns:
             List[Task]: List of tasks assigned to the user
         """
-        return self.db_session.query(Task).filter(Task.assigned_to == user_id).all()
+        return self.db_session.query(Task).filter(Task.owner_id == user_id).all()
 
     def get_all_tasks(self) -> List[Task]:
         """
