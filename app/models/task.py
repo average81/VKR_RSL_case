@@ -52,6 +52,7 @@ class TaskBase(BaseModel):
     output_path_stage2: str
     status: str = 'pending'
     stage: int = 1
+    owner_id :int
 
     # Параметры первого этапа
     first_image: Optional[int] = None

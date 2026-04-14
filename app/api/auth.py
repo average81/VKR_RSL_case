@@ -21,6 +21,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 security = HTTPBearer(auto_error=False)
 
 async def get_current_user_optional(
+        request: Request,
+        response: Response,
         credentials: HTTPAuthorizationCredentials = Depends(security),
         db: Session = Depends(get_db)
 ):
@@ -31,8 +33,13 @@ async def get_current_user_optional(
             if username is None:
                 return None
             user = get_user(db, username=username)
+            if user is None:
+                # Удаляем cookie, если пользователь не найден
+                response.delete_cookie(key="access_token")
             return user
         except JWTError:
+            # Удаляем cookie при ошибке декодирования токена
+            response.delete_cookie(key="access_token")
             return None
     return None
 
@@ -71,7 +78,7 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     return encoded_jwt
 
 @router.get("/me", response_model=UserSchema)
-def get_current_user(request: Request, db: Session = Depends(get_db)):
+def get_current_user(request: Request, response: Response, db: Session = Depends(get_db)):
     # Получаем токен из cookie
     token = request.cookies.get("access_token")
     if not token:
@@ -97,9 +104,14 @@ def get_current_user(request: Request, db: Session = Depends(get_db)):
             raise credentials_exception
         token_data = UserBase(username=username)
     except JWTError:
+        # Если токен невалиден, удаляем cookie и возвращаем ошибку
+        response.delete_cookie(key="access_token")
         raise credentials_exception
+    
     user = get_user(db, username=token_data.username)
     if user is None:
+        # Если пользователь не найден в базе, удаляем cookie и возвращаем ошибку
+        response.delete_cookie(key="access_token")
         raise credentials_exception
     return user
 
@@ -115,7 +127,7 @@ def get_current_superuser(request: Request, current_user: models.User = Depends(
 
 
 def check_group_leader(request: Request, current_user: models.User = Depends(get_current_active_user)):
-    if not current_user.is_group_leader:
+    if not hasattr(current_user, 'is_group_leader') or not current_user.is_group_leader:
         raise HTTPException(status_code=400, detail="The user doesn't have enough privileges")
     return current_user
 
@@ -133,7 +145,7 @@ def check_task_access(request: Request, current_user: models.User, task: models.
         True если доступ разрешен, False в противном случае
     """
     # Начальник группы имеет доступ ко всем задачам
-    if current_user.is_group_leader:
+    if hasattr(current_user, 'is_group_leader') and current_user.is_group_leader:
         return True
     
     # Сотрудник имеет доступ только к своим задачам
@@ -215,6 +227,17 @@ def get_register_form(
             "flashes": flashes
         }
     )
+
+@router.get("/logout")
+def logout(response: Response):
+    """
+    Обработчик выхода из системы.
+    Удаляет cookie с токеном доступа и перенаправляет на главную страницу.
+    """
+    response = RedirectResponse(url="/", status_code=303)
+    response.delete_cookie(key="access_token")
+    return response
+
 
 @router.post("/register", response_model=UserSchema)
 async def register_user(user: UserCreate, db: Session = Depends(get_db)):

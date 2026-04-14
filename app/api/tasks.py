@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Form
+from starlette.responses import RedirectResponse
 from typing import List
 
 from app.api.auth import get_current_user, check_group_leader, check_task_access
 from app.models.task import Task, TaskCreate, TaskSchema
+from app.models.enums import TaskType
+from app.models.user import User
 from app.services.task_service import TaskService
 from app.database import get_db
 from app.main import templates
@@ -15,7 +18,17 @@ async def get_tasks(request: Request, current_user = Depends(get_current_user), 
     """
     Получение списка всех задач.
     Для начальника группы - все задачи, для сотрудника - только его задачи.
+    Если пользователь не найден в базе, удаляет cookie и перенаправляет на страницу авторизации.
     """
+    if not current_user:
+        # Создаем ответ с перенаправлением и удаляем cookie
+        redirect_response = RedirectResponse(url="/auth/login", status_code=303)
+        redirect_response.delete_cookie(key="access_token")
+        return redirect_response
+    
+    # Проверяем права пользователя на создание задач
+    can_create_task = hasattr(current_user, 'is_group_leader') and current_user.is_group_leader
+    
     task_service = TaskService(db)
     tasks = task_service.get_user_tasks(current_user.id, current_user)
     
@@ -25,6 +38,8 @@ async def get_tasks(request: Request, current_user = Depends(get_current_user), 
     search_query = request.query_params.get('q', '')
     page = int(request.query_params.get('page', 1))
     
+    users = db.query(User).all()
+    
     return templates.TemplateResponse(
         request=request,
         name="tasks.html",
@@ -32,11 +47,13 @@ async def get_tasks(request: Request, current_user = Depends(get_current_user), 
             "request": request,
             "current_user": current_user,
             "tasks": tasks,
+            "users": users,
             "page": page,
             "total_pages": 1,
             "status": status_filter,
             "stage": stage_filter,
-            "q": search_query
+            "q": search_query,
+            "can_create_task": can_create_task
         }
     )
 
@@ -70,8 +87,47 @@ async def create_task(
     Создание новой задачи.
     Доступно только начальнику группы.
     """
+    assigned_user = db.query(User).filter(User.id == task_create.owner_id).first()
+    if not assigned_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
     task_service = TaskService(db)
-    return task_service.create_task(task_create, current_user)
+    return task_service.create_task(TaskType.TWO_STAGE_PROCESSING, current_user, assigned_user, task_create.description)
+
+
+@router.post("/create")
+async def create_task_form(
+    request: Request,
+    title: str = Form(...),
+    description: str = Form(...),
+    input_path: str = Form(...),
+    output_path: str = Form(...),
+    stage: str = Form(...),
+    owner_id: int = Form(...),
+    current_user = Depends(get_current_user),
+    db = Depends(get_db),
+    _ = Depends(check_group_leader)
+):
+    """
+    Создание новой задачи через форму.
+    Принимает поля формы и перенаправляет на /tasks после успешного создания.
+    """
+    task_create = TaskCreate(
+        name=title,
+        description=description,
+        input_path=input_path,
+        output_path=output_path,
+        stage=int(stage),
+        owner_id=owner_id
+    )
+    
+    assigned_user = db.query(User).filter(User.id == task_create.owner_id).first()
+    if not assigned_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    task_service = TaskService(db)
+    task = task_service.create_task(TaskType.TWO_STAGE_PROCESSING, current_user, assigned_user, task_create.description)
+    return RedirectResponse(url="/tasks", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.put("/{task_id}", response_model=TaskSchema)
