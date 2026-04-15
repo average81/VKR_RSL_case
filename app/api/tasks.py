@@ -33,6 +33,7 @@ async def get_tasks(request: Request, current_user = Depends(get_current_user), 
     status_filter = request.query_params.get('status', '')
     stage_filter = request.query_params.get('stage', '')
     search_query = request.query_params.get('q', '')
+    owner_id_filter = request.query_params.get('owner_id', '')
     page = max(1, int(request.query_params.get('page', 1)))
     per_page = 12  # Number of tasks per page
     
@@ -43,7 +44,8 @@ async def get_tasks(request: Request, current_user = Depends(get_current_user), 
         current_user, 
         status=status_filter if status_filter else None,
         stage=stage_filter if stage_filter else None,
-        search_query=search_query if search_query else None
+        search_query=search_query if search_query else None,
+        owner_id=int(owner_id_filter) if owner_id_filter else None
     )
     
     # Calculate pagination

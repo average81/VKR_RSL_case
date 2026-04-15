@@ -248,7 +248,7 @@ class TaskService:
         # For non-admin users, get tasks they can access
         return self.task_repo.get_user_accessible_tasks(user.id, status)
 
-    def get_user_tasks(self, user_id: int, user: User, status: str = None, stage: int = None, search_query: str = None) -> List[Task]:
+    def get_user_tasks(self, user_id: int, user: User, status: str = None, stage: int = None, search_query: str = None, owner_id: int = None) -> List[Task]:
         """
         Get tasks for a specific user with optional filtering.
         
@@ -258,6 +258,7 @@ class TaskService:
             status (str, optional): Filter by task status
             stage (int, optional): Filter by processing stage
             search_query (str, optional): Filter by search query in title or description
+            owner_id (int, optional): Filter by task owner ID
             
         Returns:
             List[Task]: List of tasks for the specified user that match the filters and the requesting user has permission to view
@@ -289,6 +290,9 @@ class TaskService:
         stage_value = int(stage) if isinstance(stage, str) else stage
         tasks = [task for task in tasks if task.stage == stage_value]
         
+        if owner_id:
+            tasks = [task for task in tasks if task.owner_id == owner_id]
+            
         if search_query and len(search_query.strip()) > 0:
             search_query_lower = search_query.lower()
             tasks = [task for task in tasks if 

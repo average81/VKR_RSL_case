@@ -38,6 +38,17 @@
                 <label class="form-label">Поиск</label>
                 <input type="text" name="q" class="form-control" placeholder="Название задачи..." value="{{ q }}">
             </div>
+            {% if current_user.is_group_leader %}
+            <div class="col-md-3">
+                <label class="form-label">Сотрудник</label>
+                <select name="owner_id" class="form-select">
+                    <option value="">Все</option>
+                    {% for user in users %}
+                    <option value="{{ user.id }}" {% if owner_id and owner_id|string == user.id|string %}selected{% endif %}>{{ user.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
             <div class="col-md-3 d-flex align-items-end">
                 <button type="submit" class="btn btn-outline-secondary w-100">Фильтровать</button>
             </div>
@@ -80,6 +91,19 @@
                         <div class="fw-medium">{{ task.created_at.strftime('%d.%m.%Y') }}</div>
                     </div>
                 </div>
+                
+                {% if current_user.is_group_leader %}
+                <div class="mb-2">
+                    <small class="text-muted">Назначена</small>
+                    <div class="fw-medium">
+                        {% for user in users %}
+                            {% if user.id == task.owner_id %}
+                                {{ user.username }}
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
             
             <div class="card-footer bg-transparent border-top-0">
