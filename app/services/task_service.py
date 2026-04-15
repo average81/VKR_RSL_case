@@ -1,7 +1,7 @@
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from app.models.task import Task
+from app.models.task import Task, TaskCreate
 from app.models.user import User
 from app.repository.task_repository import TaskRepository
 from app.repository.user_repository import UserRepository
@@ -31,16 +31,13 @@ class TaskService:
         self.task_repo = TaskRepository(db_session)
         self.user_repo = UserRepository(db_session)
 
-    def create_task(self, 
-                   task_type: TaskType, 
-                   created_by: User, 
-                   assigned_to: Optional[User] = None,
-                   description: Optional[str] = None) -> Task:
+    def create_task(self,
+                   created_by: User,
+                    task_data: TaskCreate) -> Task:
         """
         Create a new task.
         
         Args:
-            task_type (TaskType): Type of task to create
             created_by (User): User creating the task
             assigned_to (Optional[User]): User to assign the task to
             description (Optional[str]): Task description
@@ -52,18 +49,19 @@ class TaskService:
             PermissionDeniedException: If creator doesn't have sufficient privileges
         """
         # Validate permissions - only admins and group leaders can create tasks
-        if (hasattr(created_by, 'role') and created_by.role not in [Role.ADMIN, Role.GROUP_LEADER]) or \
-           (not hasattr(created_by, 'role') and not created_by.is_superuser):
+        if hasattr(created_by, 'role') and created_by.is_group_leader:
             raise PermissionDeniedException("Only admins and group leaders can create tasks")
         
         # Create task
         task = Task(
-            task_type=task_type,
-            status=TaskStatus.PENDING,
-            created_by=created_by.id,
-            owner_id=assigned_to.id if assigned_to else None,
-            description=description,
-            created_at=datetime.utcnow()
+            title=task_data.name,
+            description=task_data.description,
+            input_path=task_data.input_path,
+            output_path=task_data.output_path,
+            stage=task_data.stage,
+            owner_id=task_data.owner_id,
+            status="pending",
+            validator_id=created_by.id,
         )
         
         return self.task_repo.create_task(task)

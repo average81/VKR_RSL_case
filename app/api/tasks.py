@@ -118,7 +118,8 @@ async def create_task_form(
         input_path=input_path,
         output_path=output_path,
         stage=int(stage),
-        owner_id=owner_id
+        owner_id=owner_id,
+        output_path_stage2=output_path,
     )
     
     assigned_user = db.query(User).filter(User.id == task_create.owner_id).first()
@@ -126,7 +127,7 @@ async def create_task_form(
         raise HTTPException(status_code=404, detail="User not found")
     
     task_service = TaskService(db)
-    task = task_service.create_task(TaskType.TWO_STAGE_PROCESSING, current_user, assigned_user, task_create.description)
+    task = task_service.create_task(current_user, task_create)
     return RedirectResponse(url="/tasks", status_code=status.HTTP_303_SEE_OTHER)
 
 

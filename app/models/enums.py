@@ -8,8 +8,9 @@ class TaskStatus(str, Enum):
     ON_HOLD = "on_hold"
     CANCELLED = "cancelled"
 
-class TaskType(str, Enum):
-    TWO_STAGE_PROCESSING = "two_stage_processing"
+class TaskType(int, Enum):
+    DUPLICATES_PROCESSING = 1,
+    IMAGES_GROUPING = 2
 
 class Role(str, Enum):
     ADMIN = "admin"
