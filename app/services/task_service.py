@@ -7,6 +7,8 @@ from app.repository.task_repository import TaskRepository
 from app.repository.user_repository import UserRepository
 from app.exceptions import TaskNotFoundException, PermissionDeniedException, ValidationException
 from app.models.enums import TaskStatus, TaskType, Role
+from utils.utils import open_dataset
+import os
 
 class TaskService:
     """
@@ -62,7 +64,18 @@ class TaskService:
             owner_id=task_data.owner_id,
             status="pending",
             validator_id=created_by.id,
+            progress = 0,
+            total_images = 0,
         )
+        
+        # Count total images in input directory
+        if os.path.exists(task.input_path):
+            try:
+                images, _ = open_dataset(task.input_path)
+                task.total_images = len(images)
+            except Exception as e:
+                # If there's an error counting images, set to 0
+                task.total_images = 0
         
         return self.task_repo.create_task(task)
 
@@ -235,16 +248,19 @@ class TaskService:
         # For non-admin users, get tasks they can access
         return self.task_repo.get_user_accessible_tasks(user.id, status)
 
-    def get_user_tasks(self, user_id: int, user: User) -> List[Task]:
+    def get_user_tasks(self, user_id: int, user: User, status: str = None, stage: int = None, search_query: str = None) -> List[Task]:
         """
-        Get all tasks for a specific user.
+        Get tasks for a specific user with optional filtering.
         
         Args:
             user_id (int): ID of the user whose tasks to retrieve
             user (User): User requesting the tasks
+            status (str, optional): Filter by task status
+            stage (int, optional): Filter by processing stage
+            search_query (str, optional): Filter by search query in title or description
             
         Returns:
-            List[Task]: List of tasks for the specified user that the requesting user has permission to view
+            List[Task]: List of tasks for the specified user that match the filters and the requesting user has permission to view
         """
         target_user = self.user_repo.get_user_by_id(user_id)
         if not target_user:
@@ -252,17 +268,33 @@ class TaskService:
         
         # Check permissions
         if hasattr(user, 'role') and user.role == Role.ADMIN:
-            return self.task_repo.get_tasks_by_user_id(user_id)
+            tasks = self.task_repo.get_tasks_by_user_id(user_id)
         elif hasattr(user, 'role') and user.role == Role.GROUP_LEADER:
             # Group leaders can see tasks for their group members
             if target_user.created_by == user.id:
-                return self.task_repo.get_tasks_by_user_id(user_id)
+                tasks = self.task_repo.get_tasks_by_user_id(user_id)
+            else:
+                return []
         else:
             # Regular users can only see their own tasks
             if user.id == user_id:
-                return self.task_repo.get_tasks_by_user_id(user_id)
+                tasks = self.task_repo.get_tasks_by_user_id(user_id)
+            else:
+                return []
         
-        return []
+        # Apply filters
+        if status and status in ['pending', 'in_progress', 'completed', 'validated']:
+            tasks = [task for task in tasks if task.status == status]
+
+        stage_value = int(stage) if isinstance(stage, str) else stage
+        tasks = [task for task in tasks if task.stage == stage_value]
+        
+        if search_query and len(search_query.strip()) > 0:
+            search_query_lower = search_query.lower()
+            tasks = [task for task in tasks if 
+                   search_query_lower in task.title.lower() or
+                   search_query_lower in task.description.lower() if task.description]
+        return tasks
 
     def get_task_metrics(self, user: User) -> Dict[str, Any]:
         """

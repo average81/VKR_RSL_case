@@ -29,14 +29,31 @@ async def get_tasks(request: Request, current_user = Depends(get_current_user), 
     # Проверяем права пользователя на создание задач
     can_create_task = hasattr(current_user, 'is_group_leader') and current_user.is_group_leader
     
-    task_service = TaskService(db)
-    tasks = task_service.get_user_tasks(current_user.id, current_user)
-    
     # Extract query parameters from request
     status_filter = request.query_params.get('status', '')
     stage_filter = request.query_params.get('stage', '')
     search_query = request.query_params.get('q', '')
-    page = int(request.query_params.get('page', 1))
+    page = max(1, int(request.query_params.get('page', 1)))
+    per_page = 12  # Number of tasks per page
+    
+    # Get filtered tasks
+    task_service = TaskService(db)
+    tasks = task_service.get_user_tasks(
+        current_user.id, 
+        current_user, 
+        status=status_filter if status_filter else None,
+        stage=stage_filter if stage_filter else None,
+        search_query=search_query if search_query else None
+    )
+    
+    # Calculate pagination
+    total_tasks = len(tasks)
+    total_pages = max(1, (total_tasks + per_page - 1) // per_page)
+    
+    # Apply pagination
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    paginated_tasks = tasks[start_idx:end_idx]
     
     users = db.query(User).all()
     
@@ -46,10 +63,10 @@ async def get_tasks(request: Request, current_user = Depends(get_current_user), 
         context={
             "request": request,
             "current_user": current_user,
-            "tasks": tasks,
+            "tasks": paginated_tasks,
             "users": users,
             "page": page,
-            "total_pages": 1,
+            "total_pages": total_pages,
             "status": status_filter,
             "stage": stage_filter,
             "q": search_query,

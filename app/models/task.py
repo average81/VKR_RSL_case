@@ -26,8 +26,8 @@ class Task(Base):
     total_images = Column(Integer, default=0)
     
     # Параметры первого этапа (поиск дубликатов)
-    first_image = Column(Integer)
-    last_image = Column(Integer)
+    #first_image = Column(Integer)
+    #last_image = Column(Integer)
     feature_extractor_stage1 = Column(String)
     matcher_stage1 = Column(String)
     quality_algorithm = Column(String)
