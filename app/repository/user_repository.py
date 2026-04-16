@@ -31,6 +31,18 @@ class UserRepository:
         """
         return self.db_session.query(User).filter(User.id == user_id).first()
 
+    def get_group_members(self, leader_id: int) -> List[User]:
+        """
+        Get all users that belong to a group leader.
+        
+        Args:
+            leader_id (int): ID of the group leader
+            
+        Returns:
+            List[User]: List of users that belong to the group leader
+        """
+        return self.db_session.query(User).filter(User.created_by == leader_id).all()
+
     def get_user_by_username(self, username: str) -> Optional[User]:
         """
         Retrieve a user by its username.

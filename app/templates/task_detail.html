@@ -1,8 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Задача: {{ task.title }}{% endblock %}
+{% block title %}{% if task %}Задача: {{ task.title }}{% else %}Ошибка{% endif %}{% endblock %}
 
 {% block content %}
+    {% if error %}
+    <div class="alert alert-danger">
+        {{ error }}
+    </div>
+    <div class="text-center mt-4">
+        <a href="/tasks" class="btn btn-primary">Вернуться к списку задач</a>
+    </div>
+    {% else %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1>{{ task.title }}</h1>
@@ -50,7 +58,7 @@
     <div class="col-md-3">
         <div class="card text-center">
             <div class="card-body">
-                <h5 class="card-title">{{ (task.progress / task.total_images * 100)|int }}%</h5>
+                <h5 class="card-title">{{ ((task.progress / task.total_images * 100)|int) if task.total_images > 0 else 0 }}%</h5>
                 <p class="card-text text-muted">Прогресс</p>
             </div>
         </div>
@@ -75,10 +83,10 @@
         </div>
         <div class="progress" style="height: 20px;">
             <div class="progress-bar bg-success" role="progressbar" 
-                 style="width: {{ (task.progress / task.total_images * 100) if task.total_images > 0 else 0 }}%" 
-                 aria-valuenow="{{ (task.progress / task.total_images * 100) if task.total_images > 0 else 0 }}" 
+                 style="width: {{ ((task.progress / task.total_images * 100) if task.total_images > 0 else 0)|int }}%" 
+                 aria-valuenow="{{ ((task.progress / task.total_images * 100) if task.total_images > 0 else 0)|int }}" 
                  aria-valuemin="0" aria-valuemax="100">
-                {{ (task.progress / task.total_images * 100)|int }}%
+                {{ ((task.progress / task.total_images * 100)|int) if task.total_images > 0 else 0 }}%
             </div>
         </div>
     </div>
@@ -94,7 +102,7 @@
             <div class="col-md-6">
                 <div class="mb-3">
                     <label class="form-label"><i class="bi bi-person"></i> Владелец</label>
-                    <div class="fw-medium">{{ task.owner.username }}</div>
+                    <div class="fw-medium">{{ owner.username }}</div>
                 </div>
                 
                 <div class="mb-3">
@@ -164,7 +172,7 @@
                     </button>
                     {% endif %}
                     
-                    {% if task.status not in ['completed', 'validated'] %}
+                    {% if task.status not in ['completed', 'validated'] and task.validator_id == current_user.id %}
                     <button class="btn btn-danger" onclick="cancelTask({{ task.id }})">
                         <i class="bi bi-x-circle"></i> Отменить задачу
                     </button>
@@ -290,9 +298,11 @@
         </div>
     </div>
 </div>
+    {% endif %}
 {% endblock %}
 
 {% block scripts %}
+{% if not error %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 const taskId = {{ task.id }};
@@ -445,7 +455,7 @@ async function refreshResults() {
             }
             
             // Обновление прогресс-бара
-            const progress = data.progress / data.total_images * 100;
+            const progress = data.total_images > 0 ? data.progress / data.total_images * 100 : 0;
             const progressBar = document.querySelector('.progress-bar');
             progressBar.style.width = progress + '%';
             progressBar.textContent = Math.round(progress) + '%';
@@ -462,8 +472,22 @@ async function refreshResults() {
 
 // Инициализация графика
 function initChart() {
-    const ctx = document.getElementById('progressChart').getContext('2d');
+    // Проверяем существование элемента canvas
+    const canvas = document.getElementById('progressChart');
+    if (!canvas) {
+        return;
+    }
+    
+    // Попробуем получить существующий график из DOM
+    if (canvas.chart) {
+        chart = canvas.chart;
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
     chart = new Chart(ctx, {
+    // Сохраняем ссылку на график в элементе canvas
+    canvas.chart = chart;
         type: 'line',
         data: {
             labels: [],
@@ -493,14 +517,20 @@ function initChart() {
             }
         }
     });
+    
+    // Сохраняем ссылку на график в элементе canvas
+    canvas.chart = chart;
 }
 
 // Обновление графика
 function updateChart(history) {
     if (!chart) return;
     
-    const labels = history.map(item => new Date(item.timestamp).toLocaleTimeString());
-    const data = history.map(item => item.progress);
+    // Ограничиваем историю последними 20 записями для предотвращения бесконечного роста
+    const recentHistory = history.slice(-20);
+    
+    const labels = recentHistory.map(item => new Date(item.timestamp).toLocaleTimeString());
+    const data = recentHistory.map(item => item.progress);
     
     chart.data.labels = labels;
     chart.data.datasets[0].data = data;
@@ -533,4 +563,5 @@ document.addEventListener('DOMContentLoaded', function() {
     updateChart({{ progress_history|tojson }});
 });
 </script>
+{% endif %}
 {% endblock %}

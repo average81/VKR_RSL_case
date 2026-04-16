@@ -103,21 +103,66 @@ async def get_tasks(request: Request, current_user = Depends(get_current_user), 
     )
 
 
-@router.get("/{task_id}", response_model=TaskSchema)
+@router.get("/{task_id}")
 async def get_task(request: Request, task_id: int, current_user = Depends(get_current_user), db = Depends(get_db)):
     """
     Получение задачи по ID.
-    Проверяет существование задачи и права доступа.
+    Возвращает страницу с описанием задачи, если задача найдена и есть права доступа.
+    В противном случае возвращает сообщение об ошибке.
     """
     task_service = TaskService(db)
     task = task_service.get_task_by_id(task_id, current_user)
     if not task:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+        return templates.TemplateResponse(
+            request=request,
+            name="task_detail.html",
+            context={
+                "request": request,
+                "current_user": current_user,
+                "error": "Задача не найдена"
+            }
+        )
     
     if not check_task_access(request, current_user, task):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        return templates.TemplateResponse(
+            request=request,
+            name="task_detail.html",
+            context={
+                "request": request,
+                "current_user": current_user,
+                "error": "Доступ запрещен"
+            }
+        )
     
-    return task
+    # Получаем статистику и другие данные для задачи
+    stats = {}  # Здесь должна быть логика получения статистики
+    recent_events = []  # Здесь должна быть логика получения событий
+    progress_history = []  # Здесь должна быть логика получения истории прогресса
+    
+    # Если задача не активна, не запускаем автоматическое обновление
+    if task.status not in ['in_progress', 'pending']:
+        progress_history = []
+        recent_events = []
+    else:
+        # Сохраняем только последние 20 точек для графика
+        progress_history = progress_history[-20:]
+    
+    # Получаем владельца задачи
+    owner = db.query(User).filter(User.id == task.owner_id).first()
+    
+    return templates.TemplateResponse(
+        request=request,
+        name="task_detail.html",
+        context={
+            "request": request,
+            "task": task,
+            "owner": owner,
+            "current_user": current_user,
+            "stats": stats,
+            "recent_events": recent_events,
+            "progress_history": progress_history
+        }
+    )
 
 
 @router.post("/", response_model=TaskSchema, status_code=status.HTTP_201_CREATED)
@@ -236,7 +281,7 @@ async def start_task_processing(
     
     if not check_task_access(request, current_user, task):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-    
+
     return task_service.start_task(task_id)
 
 
@@ -255,10 +300,10 @@ async def complete_task(
     task = task_service.get_task_by_id(task_id, current_user)
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-    
+
     if not check_task_access(request, current_user, task):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-    
+
     return task_service.complete_task(task_id)
 
 
@@ -277,7 +322,7 @@ async def validate_task(
     task = task_service.get_task_by_id(task_id, current_user)
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-    
+
     if not check_task_access(request, current_user, task):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     

@@ -168,13 +168,12 @@ class TaskService:
         Returns:
             bool: True if user can modify the task, False otherwise
         """
-        if (hasattr(user, 'role') and user.role == Role.ADMIN) or \
-           (not hasattr(user, 'role') and user.is_superuser):
+        if user.is_superuser:
             return True
-        
-        if (hasattr(user, 'role') and user.role == Role.GROUP_LEADER):
+
+        if user.is_group_leader:
             # Group leaders can modify tasks they created or tasks assigned to their group members
-            if task.created_by == user.id:
+            if task.validator_id == user.id:
                 return True
             
             if task.assigned_to:
@@ -182,9 +181,9 @@ class TaskService:
                 if assigned_user and assigned_user.created_by == user.id:
                     return True
             
-        elif hasattr(user, 'role') and user.role == Role.USER:  # Regular user
+        else:  # Regular user
             # Regular users can only modify tasks assigned to them
-            return task.assigned_to == user.id
+            return task.owner_id == user.id
 
         return False
 
@@ -222,6 +221,7 @@ class TaskService:
             Optional[Task]: Task object if found and user has permission, None otherwise
         """
         task = self.task_repo.get_task_by_id(task_id)
+
         if not task:
             return None
         
