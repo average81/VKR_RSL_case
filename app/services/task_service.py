@@ -271,11 +271,25 @@ class TaskService:
         if hasattr(user, 'role') and user.role == Role.ADMIN:
             tasks = self.task_repo.get_tasks_by_user_id(user_id)
         elif hasattr(user, 'role') and user.role == Role.GROUP_LEADER:
-            # Group leaders can see tasks for their group members
-            if target_user.created_by == user.id:
+            # Group leader can see:
+            # 1. Tasks assigned to them (owner_id = current_user.id)
+            # 2. Tasks they created for others (validator_id = current_user.id)
+            if user.id == user_id:
+                # Viewing own assigned tasks
                 tasks = self.task_repo.get_tasks_by_user_id(user_id)
             else:
-                return []
+                # For other users, show tasks that this group leader created
+                tasks = self.task_repo.get_tasks_by_validator_id(user.id)
+            
+            # Also include tasks assigned to group members if they are this leader's subordinates
+            target_user_obj = self.user_repo.get_user_by_id(user_id)
+            if target_user_obj and target_user_obj.created_by == user.id:
+                user_tasks = self.task_repo.get_tasks_by_user_id(user_id)
+                # Combine tasks ensuring no duplicates
+                task_dict = {task.id: task for task in tasks}
+                for task in user_tasks:
+                    task_dict[task.id] = task
+                tasks = list(task_dict.values())
         else:
             # Regular users can only see their own tasks
             if user.id == user_id:

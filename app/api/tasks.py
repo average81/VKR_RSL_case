@@ -39,14 +39,40 @@ async def get_tasks(request: Request, current_user = Depends(get_current_user), 
     
     # Get filtered tasks
     task_service = TaskService(db)
-    tasks = task_service.get_user_tasks(
-        current_user.id, 
-        current_user, 
-        status=status_filter if status_filter else None,
-        stage=stage_filter if stage_filter else None,
-        search_query=search_query if search_query else None,
-        owner_id=int(owner_id_filter) if owner_id_filter else None
-    )
+    
+    # Для начальника группы получаем все задачи без ограничения по user_id
+    if hasattr(current_user, 'is_group_leader') and current_user.is_group_leader:
+        # Получаем задачи, созданные этим начальником группы
+        tasks = task_service.task_repo.get_tasks_by_validator_id(current_user.id)
+        # Добавляем задачи, назначенные ему лично
+        own_tasks = task_service.task_repo.get_tasks_by_user_id(current_user.id)
+        # Объединяем списки без дубликатов
+        task_dict = {task.id: task for task in tasks}
+        for task in own_tasks:
+            task_dict[task.id] = task
+        tasks = list(task_dict.values())
+        
+        # Применяем фильтры к объединенному списку
+        if status_filter:
+            tasks = [task for task in tasks if task.status == status_filter]
+        if stage_filter:
+            tasks = [task for task in tasks if task.stage == int(stage_filter)]
+        if search_query:
+            tasks = [task for task in tasks if 
+                   search_query.lower() in task.title.lower() or
+                   search_query.lower() in task.description.lower() if task.description]
+        if owner_id_filter:
+            tasks = [task for task in tasks if task.owner_id == int(owner_id_filter)]
+    else:
+        # Для обычных пользователей - только их задачи
+        tasks = task_service.get_user_tasks(
+            current_user.id, 
+            current_user, 
+            status=status_filter if status_filter else None,
+            stage=stage_filter if stage_filter else None,
+            search_query=search_query if search_query else None,
+            owner_id=int(owner_id_filter) if owner_id_filter else None
+        )
     
     # Calculate pagination
     total_tasks = len(tasks)

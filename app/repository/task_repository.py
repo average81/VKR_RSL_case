@@ -100,6 +100,18 @@ class TaskRepository:
         """
         return self.db_session.query(Task).filter(Task.owner_id == user_id).all()
 
+    def get_tasks_by_validator_id(self, validator_id: int) -> List[Task]:
+        """
+        Get all tasks created by a specific validator (group leader).
+        
+        Args:
+            validator_id (int): ID of the validator
+            
+        Returns:
+            List[Task]: List of tasks created by the validator
+        """
+        return self.db_session.query(Task).filter(Task.validator_id == validator_id).all()
+
     def get_all_tasks(self) -> List[Task]:
         """
         Get all tasks from the database.
