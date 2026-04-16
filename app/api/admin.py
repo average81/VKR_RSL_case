@@ -39,6 +39,7 @@ def get_admin_panel(
 
 @router.post("/users/{user_id}/promote")
 def promote_user(
+    request: Request,
     user_id: int,
     role: str = Form(...),
     db: Session = Depends(get_db),
@@ -46,22 +47,51 @@ def promote_user(
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
+        users = db.query(User).all()
+        return templates.TemplateResponse(
+            request=request,
+            name="admin.html",
+            context={
+                "users": users,
+                "current_user": current_user,
+                "message": "Пользователь не найден"
+            }
+        )
     
     if role == "group_leader":
         user.is_group_leader = True
     elif role == "admin":
         user.is_superuser = True
     else:
-        raise HTTPException(status_code=400, detail="Недопустимая роль")
+        users = db.query(User).all()
+        return templates.TemplateResponse(
+            request=request,
+            name="admin.html",
+            context={
+                "users": users,
+                "current_user": current_user,
+                "message": "Недопустимая роль"
+            }
+        )
     
     db.commit()
     db.refresh(user)
-    return {"status": "success", "message": f"Пользователь повышен до {role}"}
+    
+    users = db.query(User).all()
+    return templates.TemplateResponse(
+        request=request,
+        name="admin.html",
+        context={
+            "users": users,
+            "current_user": current_user,
+            "message": f"Пользователь повышен до {role}"
+        }
+    )
 
 
 @router.post("/users/{user_id}/demote")
 def demote_user(
+    request: Request,
     user_id: int,
     role: str = Form(...),
     db: Session = Depends(get_db),
@@ -69,33 +99,90 @@ def demote_user(
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
+        users = db.query(User).all()
+        return templates.TemplateResponse(
+            request=request,
+            name="admin.html",
+            context={
+                "users": users,
+                "current_user": current_user,
+                "message": "Пользователь не найден"
+            }
+        )
     
     if role == "group_leader":
         user.is_group_leader = False
     elif role == "admin":
         user.is_superuser = False
     else:
-        raise HTTPException(status_code=400, detail="Недопустимая роль")
+        users = db.query(User).all()
+        return templates.TemplateResponse(
+            request=request,
+            name="admin.html",
+            context={
+                "users": users,
+                "current_user": current_user,
+                "message": "Недопустимая роль"
+            }
+        )
     
     db.commit()
-    return {"status": "success", "message": f"Права {role} сняты"}
+    
+    users = db.query(User).all()
+    return templates.TemplateResponse(
+        request=request,
+        name="admin.html",
+        context={
+            "users": users,
+            "current_user": current_user,
+            "message": f"Права {role} сняты"
+        }
+    )
 
 
 @router.post("/users/{user_id}/delete")
 def delete_user(
+    request: Request,
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(check_superuser)
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
+        users = db.query(User).all()
+        return templates.TemplateResponse(
+            request=request,
+            name="admin.html",
+            context={
+                "users": users,
+                "current_user": current_user,
+                "message": "Пользователь не найден"
+            }
+        )
     
     # Нельзя удалить самого себя
     if user.id == current_user.id:
-        raise HTTPException(status_code=400, detail="Нельзя удалить самого себя")
+        users = db.query(User).all()
+        return templates.TemplateResponse(
+            request=request,
+            name="admin.html",
+            context={
+                "users": users,
+                "current_user": current_user,
+                "message": "Нельзя удалить самого себя"
+            }
+        )
     
     db.delete(user)
     db.commit()
-    return {"status": "success", "message": "Пользователь удален"}
+    
+    users = db.query(User).all()
+    return templates.TemplateResponse(
+        request=request,
+        name="admin.html",
+        context={
+            "users": users,
+            "current_user": current_user,
+            "message": "Пользователь удален"
+        }
+    )

@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Form, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
@@ -16,6 +18,7 @@ from app.models import User
 from app.settings import settings
 from app.main import templates
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from typing import Dict, Optional
 
 # Опциональная зависимость для получения пользователя без ошибки 401
 security = HTTPBearer(auto_error=False)
@@ -265,3 +268,85 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
     return db_user
+
+
+@router.get("/profile", response_class=HTMLResponse)
+def get_user_profile(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Получение профиля пользователя с статистикой по задачам.
+    """
+    # Получаем информацию о пользователе
+    user = current_user
+    
+    # Статистика по назначенным задачам
+    task_stats = db.query(
+        Task.status,
+        Task.stage,
+        func.count(Task.id)
+    ).filter(
+        Task.owner_id == user.id
+    ).group_by(
+        Task.status, Task.stage
+    ).all()
+    
+    # Инициализируем статистику
+    stats = {
+        'pending': 0,
+        'in_progress': 0,
+        'completed': 0,
+        'validated': 0,
+        'stage1': 0,
+        'stage2': 0,
+        'total': 0
+    }
+    
+    # Заполняем статистику по статусам и этапам
+    for status, stage, count in task_stats:
+        if status in stats:
+            stats[status] += count
+        if stage == 1:
+            stats['stage1'] += count
+        elif stage == 2:
+            stats['stage2'] += count
+        stats['total'] += count
+    
+    # Статистика для начальника группы (задачи, назначенные им)
+    leader_stats: Optional[Dict] = None
+    if user.is_group_leader:
+        leader_task_stats = db.query(
+            Task.status,
+            func.count(Task.id)
+        ).filter(
+            Task.validator_id == user.id  # Используем validator_id как создателя задачи
+        ).group_by(
+            Task.status
+        ).all()
+        
+        leader_stats = {
+            'pending': 0,
+            'in_progress': 0,
+            'completed': 0,
+            'validated': 0,
+            'total': 0
+        }
+        
+        for status, count in leader_task_stats:
+            if status in leader_stats:
+                leader_stats[status] += count
+            leader_stats['total'] += count
+    
+    return templates.TemplateResponse(
+        request=request,
+        name="profile.html",
+        context={
+            "request": request,
+            "user": user,
+            "current_user": user,
+            "stats": stats,
+            "leader_stats": leader_stats
+        }
+    )

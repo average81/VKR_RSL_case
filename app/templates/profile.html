@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Профиль пользователя - {{ user.username }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1>Профиль пользователя</h1>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">{{ user.username }}</h5>
+                    <p class="card-text text-muted">{{ user.email }}</p>
+                    
+                    <div class="mb-3">
+                        <span class="badge bg-primary">Учетная запись: </span>
+                        {% if user.is_superuser %}
+                            <span class="badge bg-danger">Администратор</span>
+                        {% elif user.is_group_leader %}
+                            <span class="badge bg-warning text-dark">Начальник группы</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Сотрудник</span>
+                        {% endif %}
+                    </div>
+                    
+                    <p class="card-text">
+                        <small class="text-muted">
+                            Регистрация: {{ user.created_at.strftime('%d.%m.%Y') }}<br>
+                            {% if user.last_login %}
+                            Последний вход: {{ user.last_login.strftime('%d.%m.%Y %H:%M') }}
+                            {% endif %}
+                        </small>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <!-- Задачи пользователя -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Назначенные задачи</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Статистика по статусам -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-6 col-md-3">
+                            <div class="bg-light p-3 rounded text-center">
+                                <h6 class="text-primary">В ожидании</h6>
+                                <h4>{{ stats.pending }}</h4>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="bg-light p-3 rounded text-center">
+                                <h6 class="text-warning">В процессе</h6>
+                                <h4>{{ stats.in_progress }}</h4>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="bg-light p-3 rounded text-center">
+                                <h6 class="text-success">Завершено</h6>
+                                <h4>{{ stats.completed }}</h4>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="bg-light p-3 rounded text-center">
+                                <h6 class="text-info">Подтверждено</h6>
+                                <h4>{{ stats.validated }}</h4>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Статистика по типам задач -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="bg-light p-3 rounded">
+                                <h6 class="text-muted">По этапам обработки</h6>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Поиск дубликатов (этап 1):</span>
+                                    <span class="badge bg-primary">{{ stats.stage1 }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>Группировка по выпускам (этап 2):</span>
+                                    <span class="badge bg-primary">{{ stats.stage2 }}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="bg-light p-3 rounded">
+                                <h6 class="text-muted">Общее количество задач</h6>
+                                <h3 class="text-center">{{ stats.total }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Задачи, назначенные начальником группы (только для начальников групп) -->
+            {% if user.is_group_leader %}
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Задачи, назначенные мной</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3">
+                            <div class="bg-light p-3 rounded text-center">
+                                <h6 class="text-primary">Не начаты</h6>
+                                <h4>{{ leader_stats.pending }}</h4>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="bg-light p-3 rounded text-center">
+                                <h6 class="text-warning">В работе</h6>
+                                <h4>{{ leader_stats.in_progress }}</h4>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="bg-light p-3 rounded text-center">
+                                <h6 class="text-success">Готовы к проверке</h6>
+                                <h4>{{ leader_stats.completed }}</h4>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="bg-light p-3 rounded text-center">
+                                <h6 class="text-info">Проверены</h6>
+                                <h4>{{ leader_stats.validated }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <div class="bg-light p-3 rounded">
+                            <h6 class="text-muted">Общее количество назначенных задач</h6>
+                            <h3 class="text-center">{{ leader_stats.total }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

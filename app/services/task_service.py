@@ -286,9 +286,9 @@ class TaskService:
         # Apply filters
         if status and status in ['pending', 'in_progress', 'completed', 'validated']:
             tasks = [task for task in tasks if task.status == status]
-
-        stage_value = int(stage) if isinstance(stage, str) else stage
-        tasks = [task for task in tasks if task.stage == stage_value]
+        if stage is not None:
+            stage_value = int(stage) if isinstance(stage, str) else stage
+            tasks = [task for task in tasks if task.stage == stage_value]
         
         if owner_id:
             tasks = [task for task in tasks if task.owner_id == owner_id]
