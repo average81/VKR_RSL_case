@@ -160,6 +160,12 @@
                     </button>
                     {% endif %}
                     
+                    {% if task.status == 'stopped' %}
+                    <button class="btn btn-secondary" disabled>
+                        <i class="bi bi-play"></i> Начать обработку
+                    </button>
+                    {% endif %}
+                    
                     {% if task.status == 'in_progress' %}
                     <button class="btn btn-warning" onclick="pauseProcessing({{ task.id }})">
                         <i class="bi bi-pause"></i> Приостановить обработку
@@ -172,7 +178,7 @@
                     </button>
                     {% endif %}
                     
-                    {% if task.status not in ['completed', 'validated'] and task.validator_id == current_user.id %}
+                    {% if task.status not in ['completed', 'validated', 'stopped'] and task.validator_id == current_user.id %}
                     <button class="btn btn-danger" onclick="cancelTask({{ task.id }})">
                         <i class="bi bi-x-circle"></i> Отменить задачу
                     </button>
@@ -272,7 +278,12 @@
         <!-- График прогресса -->
         <div class="mt-4">
             <h6>Динамика обработки</h6>
-            <canvas id="progressChart" height="100"></canvas>
+            <div id="progressChartContainer" style="position: relative; height: 100px;">
+                <canvas id="progressChart" height="100"></canvas>
+                <div id="chartMessage" class="text-muted fst-italic small" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                    Данные о динамике обработки появятся после начала обработки изображений
+                </div>
+            </div>
         </div>
         
         <!-- Последние события -->
@@ -305,263 +316,12 @@
 {% if not error %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-const taskId = {{ task.id }};
-let chart = null;
-
-// Запуск обработки задачи
-async function startProcessing(taskId) {
-    if (!confirm('Начать обработку задачи?')) return;
-    
-    try {
-        const response = await fetch(`/images/${taskId}/process`, {
-            method: 'POST'
-        });
-        
-        if (response.ok) {
-            showNotification('Обработка начата!');
-            location.reload();
-        } else {
-            const data = await response.json();
-            showNotification('Ошибка: ' + data.detail, 'danger');
-        }
-    } catch (error) {
-        showNotification('Ошибка сети: ' + error.message, 'danger');
-    }
-}
-
-// Приостановка обработки задачи
-async function pauseProcessing(taskId) {
-    if (!confirm('Приостановить обработку задачи?')) return;
-    
-    try {
-        const response = await fetch(`/tasks/${taskId}/pause`, {
-            method: 'POST'
-        });
-        
-        if (response.ok) {
-            showNotification('Обработка приостановлена!');
-            location.reload();
-        } else {
-            const data = await response.json();
-            showNotification('Ошибка: ' + data.detail, 'danger');
-        }
-    } catch (error) {
-        showNotification('Ошибка сети: ' + error.message, 'danger');
-    }
-}
-
-// Подтверждение выполнения задачи
-async function validateTask(taskId) {
-    if (!confirm('Подтвердить выполнение задачи?')) return;
-    
-    try {
-        const response = await fetch(`/tasks/${taskId}/validate`, {
-            method: 'POST'
-        });
-        
-        if (response.ok) {
-            showNotification('Задача подтверждена!');
-            location.reload();
-        } else {
-            const data = await response.json();
-            showNotification('Ошибка: ' + data.detail, 'danger');
-        }
-    } catch (error) {
-        showNotification('Ошибка сети: ' + error.message, 'danger');
-    }
-}
-
-// Отмена задачи
-async function cancelTask(taskId) {
-    if (!confirm('Отменить задачу? Все результаты будут удалены.')) return;
-    
-    try {
-        const response = await fetch(`/tasks/${taskId}/cancel`, {
-            method: 'POST'
-        });
-        
-        if (response.ok) {
-            showNotification('Задача отменена!');
-            window.location.href = '/tasks';
-        } else {
-            const data = await response.json();
-            showNotification('Ошибка: ' + data.detail, 'danger');
-        }
-    } catch (error) {
-        showNotification('Ошибка сети: ' + error.message, 'danger');
-    }
-}
-
-// Удаление задачи
-async function deleteTask(taskId) {
-    if (!confirm('Удалить задачу? Это действие нельзя отменить.')) return;
-    
-    try {
-        const response = await fetch(`/tasks/${taskId}`, {
-            method: 'DELETE'
-        });
-        
-        if (response.ok) {
-            showNotification('Задача удалена!');
-            window.location.href = '/tasks';
-        } else {
-            const data = await response.json();
-            showNotification('Ошибка: ' + data.detail, 'danger');
-        }
-    } catch (error) {
-        showNotification('Ошибка сети: ' + error.message, 'danger');
-    }
-}
-
-// Просмотр логов
-function viewLogs(taskId) {
-    window.open(`/tasks/${taskId}/logs`, '_blank');
-}
-
-// Скачивание результатов
-function downloadResults(taskId) {
-    window.open(`/tasks/${taskId}/download`, '_blank');
-}
-
-// Просмотр дубликатов
-function viewDuplicates() {
-    window.location.href = `/validation/stage1/${taskId}`;
-}
-
-// Просмотр выпусков
-function viewIssues() {
-    window.location.href = `/validation/stage2/${taskId}`;
-}
-
-// Обновление результатов
-async function refreshResults() {
-    try {
-        const response = await fetch(`/api/tasks/${taskId}/status`);
-        
-        if (response.ok) {
-            const data = await response.json();
-            
-            // Обновление статистики
-            document.querySelector('.card-title').textContent = data.progress;
-            
-            if (data.stage === 1) {
-                document.querySelectorAll('.text-primary')[0].textContent = data.stats.duplicate_groups || 0;
-                document.querySelectorAll('.text-warning')[0].textContent = data.stats.duplicate_images || 0;
-                document.querySelectorAll('.text-success')[0].textContent = data.stats.unique_images || 0;
-            } else if (data.stage === 2) {
-                document.querySelectorAll('.text-primary')[0].textContent = data.stats.issues || 0;
-                document.querySelectorAll('.text-info')[0].textContent = data.stats.images_in_issues || 0;
-                document.querySelectorAll('.text-danger')[0].textContent = data.stats.unassigned_images || 0;
-            }
-            
-            // Обновление прогресс-бара
-            const progress = data.total_images > 0 ? data.progress / data.total_images * 100 : 0;
-            const progressBar = document.querySelector('.progress-bar');
-            progressBar.style.width = progress + '%';
-            progressBar.textContent = Math.round(progress) + '%';
-            
-            // Обновление графика
-            updateChart(data.progress_history);
-            
-            showNotification('Результаты обновлены!');
-        }
-    } catch (error) {
-        showNotification('Ошибка обновления: ' + error.message, 'danger');
-    }
-}
-
-// Инициализация графика
-function initChart() {
-    // Проверяем существование элемента canvas
-    const canvas = document.getElementById('progressChart');
-    if (!canvas) {
-        return;
-    }
-    
-    // Попробуем получить существующий график из DOM
-    if (canvas.chart) {
-        chart = canvas.chart;
-        return;
-    }
-    
-    const ctx = canvas.getContext('2d');
-    chart = new Chart(ctx, {
-    // Сохраняем ссылку на график в элементе canvas
-    canvas.chart = chart;
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'Обработано изображений',
-                data: [],
-                borderColor: 'rgb(75, 192, 192)',
-                tension: 0.1,
-                fill: false
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        stepSize: 1
-                    }
-                }
-            }
-        }
-    });
-    
-    // Сохраняем ссылку на график в элементе canvas
-    canvas.chart = chart;
-}
-
-// Обновление графика
-function updateChart(history) {
-    if (!chart) return;
-    
-    // Ограничиваем историю последними 20 записями для предотвращения бесконечного роста
-    const recentHistory = history.slice(-20);
-    
-    const labels = recentHistory.map(item => new Date(item.timestamp).toLocaleTimeString());
-    const data = recentHistory.map(item => item.progress);
-    
-    chart.data.labels = labels;
-    chart.data.datasets[0].data = data;
-    chart.update();
-}
-
-// Показ уведомления
-function showNotification(message, type = 'success') {
-    // Создаем элемент уведомления
-    const alert = document.createElement('div');
-    alert.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
-    alert.style.zIndex = '1000';
-    alert.role = 'alert';
-    alert.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(alert);
-    
-    // Удаляем через 5 секунд
-    setTimeout(() => {
-        alert.remove();
-    }, 5000);
-}
-
-// Инициализация при загрузке страницы
-document.addEventListener('DOMContentLoaded', function() {
-    initChart();
-    updateChart({{ progress_history|tojson }});
-});
+    // Передаем данные из шаблона в JavaScript
+    window.taskData = {
+        taskId: {{ task.id }},
+        progressHistory: {{ progress_history|tojson }}
+    };
 </script>
+<script src="/static/js/task_detail.js"></script>
 {% endif %}
 {% endblock %}

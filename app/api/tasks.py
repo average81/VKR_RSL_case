@@ -203,7 +203,7 @@ async def create_task_form(
     Принимает поля формы и перенаправляет на /tasks после успешного создания.
     """
     task_create = TaskCreate(
-        name=title,
+        title=title,
         description=description,
         input_path=input_path,
         output_path=output_path,
@@ -327,3 +327,25 @@ async def validate_task(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     
     return task_service.validate_task(task_id)
+
+
+@router.post("/{task_id}/cancel")
+async def cancel_task(
+    request: Request,
+    task_id: int,
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
+) -> TaskSchema:
+    """
+    Отмена задачи.
+    Доступно владельцу задачи или суперпользователю.
+    """
+    task_service = TaskService(db)
+    task = task_service.get_task_by_id(task_id, current_user)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    
+    if not check_task_access(request, current_user, task):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    
+    return task_service.cancel_task(task_id, current_user)

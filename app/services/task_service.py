@@ -56,7 +56,7 @@ class TaskService:
         
         # Create task
         task = Task(
-            title=task_data.name,
+            title=task_data.title,
             description=task_data.description,
             input_path=task_data.input_path,
             output_path=task_data.output_path,
@@ -198,6 +198,10 @@ class TaskService:
         Returns:
             bool: True if transition is valid, False otherwise
         """
+        # Позволяем переход в статус 'stopped' из любых состояний, кроме 'validated'
+        if new_status == TaskStatus.STOPPED:
+            return current_status != TaskStatus.COMPLETED
+            
         valid_transitions = {
             TaskStatus.PENDING: [TaskStatus.ASSIGNED, TaskStatus.CANCELLED],
             TaskStatus.ASSIGNED: [TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED],
@@ -433,3 +437,21 @@ class TaskService:
         
         # For other task types, basic validation
         return task.status == TaskStatus.COMPLETED
+
+    def cancel_task(self, task_id: int, user: User) -> Task:
+        """
+        Cancel a task by changing its status to 'stopped'.
+        
+        Args:
+            task_id (int): ID of the task to cancel
+            user (User): User cancelling the task
+            
+        Returns:
+            Task: Updated task object
+            
+        Raises:
+            TaskNotFoundException: If task doesn't exist
+            PermissionDeniedException: If user doesn't have sufficient privileges
+            ValidationException: If status transition is invalid
+        """
+        return self.update_task_status(task_id, TaskStatus.STOPPED, user)

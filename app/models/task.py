@@ -12,12 +12,13 @@ class Task(Base):
     title = Column(String, index=True)
     description = Column(Text)
     owner_id = Column(Integer, ForeignKey("users.id"))
-    status = Column(String, default="pending")  # pending, in_progress, completed, validated
+    status = Column(String, default="pending")  # pending, in_progress, completed, validated, stopped
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)
     validated_at = Column(DateTime(timezone=True), nullable=True)
     validator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
     input_path = Column(String)
     output_path = Column(String)
     output_path_stage2 = Column(String)
@@ -45,29 +46,29 @@ class Task(Base):
     validate_stage2 = Column(Boolean, default=False)
 
 class TaskBase(BaseModel):
-    name: str
+    title: str
     description: Optional[str] = None
     input_path: str
     output_path: str
-    output_path_stage2: str
+    output_path_stage2: Optional[str] = None
     status: str = 'pending'
     stage: int = 1
-    owner_id :int
+    owner_id: int
 
     # Параметры первого этапа
     first_image: Optional[int] = None
     last_image: Optional[int] = None
-    feature_extractor_stage1: str = 'SIFT'
-    matcher_stage1: str = 'FLANN'
-    quality_algorithm: str = 'BRISQUE'
-    match_threshold_stage1: float = 0.75
-    duplicate_threshold_stage1: float = 0.9
+    feature_extractor_stage1: Optional[str] = 'SIFT'
+    matcher_stage1: Optional[str] = 'FLANN'
+    quality_algorithm: Optional[str] = 'BRISQUE'
+    match_threshold_stage1: Optional[float] = 0.75
+    duplicate_threshold_stage1: Optional[float] = 0.9
 
     # Параметры второго этапа
-    feature_extractor_stage2: str = 'SIFT'
-    matcher_stage2: str = 'FLANN'
-    duplicate_threshold_stage2: float = 0.8
-    logos_path: str = ''
+    feature_extractor_stage2: Optional[str] = 'SIFT'
+    matcher_stage2: Optional[str] = 'FLANN'
+    duplicate_threshold_stage2: Optional[float] = 0.8
+    logos_path: Optional[str] = ''
 
     # Параметры валидации
     validate_stage1: bool = False
@@ -79,11 +80,11 @@ class TaskCreate(TaskBase):
 class TaskSchema(TaskBase):
     id: int
     assigned_to: Optional[int] = None
-    created_by: int
     created_at: datetime
     updated_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     validated_at: Optional[datetime] = None
+    validator_id: Optional[int] = None
 
     class Config:
         orm_mode = True
