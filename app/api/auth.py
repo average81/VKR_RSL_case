@@ -191,6 +191,20 @@ def login_for_access_token(
             }
         )
     
+    # Получаем все задачи пользователя
+    from app.services.task_service import TaskService
+    task_service = TaskService(db)
+    user_tasks = task_service.get_user_tasks(user.id, user)
+    
+    # Переводим все запущенные задачи в статус "ожидание"
+    for task in user_tasks:
+        if task.status == "in_progress":
+            try:
+                task_service.update_task_status(task.id, "pending", user)
+                print(f"Задача {task.id} переведена в статус 'ожидание'")
+            except Exception as e:
+                print(f"Ошибка при обновлении статуса задачи {task.id}: {str(e)}")
+    
     access_token_expires = timedelta(minutes=600)
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
@@ -232,11 +246,28 @@ def get_register_form(
     )
 
 @router.get("/logout")
-def logout(response: Response):
+def logout(request: Request, response: Response, db: Session = Depends(get_db)):
     """
     Обработчик выхода из системы.
-    Удаляет cookie с токеном доступа и перенаправляет на главную страницу.
+    При выходе приостанавливает все запущенные задачи пользователя и удаляет cookie с токеном доступа.
     """
+    current_user = get_current_user(request, response, db)
+    if current_user:
+        # Получаем все запущенные задачи пользователя
+        from app.services.task_service import TaskService
+        task_service = TaskService(db)
+        user_tasks = task_service.get_user_tasks(current_user.id, current_user)
+        
+        # Приостанавливаем все задачи в статусе "in_progress"
+        for task in user_tasks:
+            if task.status == "in_progress":
+                try:
+                    task_service.pause_task(task.id, current_user)
+                except Exception as e:
+                    # Логируем ошибку, но не прерываем процесс выхода
+                    print(f"Error pausing task {task.id}: {str(e)}")
+    
+    # Удаляем cookie и перенаправляем
     response = RedirectResponse(url="/", status_code=303)
     response.delete_cookie(key="access_token")
     return response

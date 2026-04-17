@@ -15,7 +15,8 @@ from processor.duplicates_processor import DuplicatesProcessor
 from processor.preprocess import preprocess_image
 import cv2
 import re
-import time
+import datetime
+import numpy as np
 import pandas as pd
 from repository.sql_repository import SQLProcessedRepository, Processed_table, create_sqlengine
 
@@ -234,7 +235,7 @@ def process_images_task(
     # Завершение задачи
     if task:
         task.status = "completed"
-        task.completed_at = datetime.utcnow()
+        task.completed_at = datetime.now()
         db.commit()
 
 @router.get("/task/{task_id}")
@@ -254,7 +255,7 @@ def get_task_images(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
-    if task.assigned_to != current_user.id and task.created_by != current_user.id and not current_user.is_superuser:
+    if task.owner_id != current_user.id and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     images = db.query(models.Image).filter(models.Image.task_id == task_id).all()
@@ -281,7 +282,7 @@ def get_image(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
-    if task.assigned_to != current_user.id and task.created_by != current_user.id and not current_user.is_superuser:
+    if task.owner_id != current_user.id and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     return image
@@ -371,7 +372,7 @@ def get_duplicate_groups(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
-    if task.assigned_to != current_user.id and task.created_by != current_user.id and not current_user.is_superuser:
+    if task.owner_id != current_user.id and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     # Получаем все дубликаты задачи
@@ -459,7 +460,7 @@ def get_processing_progress(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
-    if task.assigned_to != current_user.id and task.created_by != current_user.id and not current_user.is_superuser:
+    if task.owner_id != current_user.id and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     # Получаем общее количество изображений в задаче
@@ -509,7 +510,7 @@ def start_image_processing(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
-    if task.assigned_to != current_user.id and task.created_by != current_user.id and not current_user.is_superuser:
+    if task.owner_id != current_user.id and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     if task.status in ["in_progress", "completed", "validated"]:

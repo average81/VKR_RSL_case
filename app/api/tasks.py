@@ -336,6 +336,7 @@ async def cancel_task(
     current_user = Depends(get_current_user),
     db = Depends(get_db)
 ) -> TaskSchema:
+
     """
     Отмена задачи.
     Доступно владельцу задачи или суперпользователю.
@@ -349,3 +350,48 @@ async def cancel_task(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     
     return task_service.cancel_task(task_id, current_user)
+
+
+@router.post("/{task_id}/pause")
+async def pause_task(
+        request: Request,
+        task_id: int,
+        current_user = Depends(get_current_user),
+        db = Depends(get_db)
+) -> TaskSchema:
+    """
+    Приостановка обработки задачи.
+    Доступно сотруднику (если задача назначена ему) или начальнику группы.
+    """
+    task_service = TaskService(db)
+    task = task_service.get_task_by_id(task_id, current_user)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    if not check_task_access(request, current_user, task):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    return task_service.pause_task(task_id, current_user)
+
+
+@router.post("/{task_id}/resume")
+async def resume_task(
+        request: Request,
+        task_id: int,
+        current_user = Depends(get_current_user),
+        db = Depends(get_db)
+) -> TaskSchema:
+    """
+    Возобновление приостановленной задачи.
+    Доступно сотруднику (если задача назначена ему) или начальнику группы.
+    """
+    task_service = TaskService(db)
+    task = task_service.get_task_by_id(task_id, current_user)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    if not check_task_access(request, current_user, task):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    return task_service.resume_task(task_id, current_user)
+

@@ -44,7 +44,7 @@ from app.api import auth, tasks, images, grouping, processing, admin
 app.include_router(auth.router, tags=["auth"])
 app.include_router(tasks.router, tags=["tasks"])
 app.include_router(admin.router, tags=["admin"])
-#app.include_router(images.router, prefix="/images", tags=["images"])
+app.include_router(images.router, tags=["images"])
 #app.include_router(grouping.router, prefix="/grouping", tags=["grouping"])
 #app.include_router(processing.router, prefix="/processing", tags=["processing"])
 
@@ -57,3 +57,6 @@ async def root(request: Request):
         return RedirectResponse(url="/tasks")
     # Если токена нет, перенаправляем на страницу входа
     return RedirectResponse(url="/auth/login")
+
+
+

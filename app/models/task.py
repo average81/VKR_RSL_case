@@ -12,7 +12,7 @@ class Task(Base):
     title = Column(String, index=True)
     description = Column(Text)
     owner_id = Column(Integer, ForeignKey("users.id"))
-    status = Column(String, default="pending")  # pending, in_progress, completed, validated, stopped
+    status = Column(String, default="pending")  # pending, in_progress, completed, validated, stopped, paused
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)

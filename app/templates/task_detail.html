@@ -113,8 +113,8 @@
                 <div class="mb-3">
                     <label class="form-label"><i class="bi bi-check2-circle"></i> Статус</label>
                     <div>
-                        <span class="badge bg-{{ 'success' if task.status == 'validated' else 'primary' if task.status == 'completed' else 'warning' if task.status == 'in_progress' else 'secondary' }}">
-                            {{ {'pending': 'Ожидание', 'in_progress': 'В процессе', 'completed': 'Завершено', 'validated': 'Подтверждено'}[task.status] }}
+                        <span class="badge bg-{{ 'success' if task.status == 'validated' else 'primary' if task.status == 'completed' else 'warning' if task.status in ['in_progress', 'paused'] else 'danger' if task.status == 'stopped' else 'secondary' }}">
+                            {{ {'pending': 'Ожидание', 'in_progress': 'В процессе', 'paused': 'Приостановлена', 'completed': 'Завершено', 'validated': 'Подтверждено', 'stopped': 'Прекращена'}[task.status] }}
                         </span>
                         {% if task.validated_at %}
                         <small class="text-muted ms-2">{{ task.validated_at.strftime('%d.%m.%Y %H:%M') }}</small>
@@ -169,6 +169,12 @@
                     {% if task.status == 'in_progress' %}
                     <button class="btn btn-warning" onclick="pauseProcessing({{ task.id }})">
                         <i class="bi bi-pause"></i> Приостановить обработку
+                    </button>
+                    {% endif %}
+                    
+                    {% if task.status == 'paused' %}
+                    <button class="btn btn-success" onclick="resumeProcessing({{ task.id }})">
+                        <i class="bi bi-play"></i> Продолжить выполнение
                     </button>
                     {% endif %}
                     

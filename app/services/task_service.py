@@ -150,10 +150,8 @@ class TaskService:
         task.status = new_status
         
         # Set additional timestamps based on status
-        if new_status == TaskStatus.IN_PROGRESS and not task.started_at:
-            task.started_at = datetime.utcnow()
-        elif new_status == TaskStatus.COMPLETED:
-            task.completed_at = datetime.utcnow()
+        if new_status == TaskStatus.COMPLETED:
+            task.completed_at = datetime.now()
             
         return self.task_repo.update_task(task)
 
@@ -205,10 +203,11 @@ class TaskService:
         valid_transitions = {
             TaskStatus.PENDING: [TaskStatus.ASSIGNED, TaskStatus.CANCELLED],
             TaskStatus.ASSIGNED: [TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED],
-            TaskStatus.IN_PROGRESS: [TaskStatus.COMPLETED, TaskStatus.ON_HOLD, TaskStatus.CANCELLED],
+            TaskStatus.IN_PROGRESS: [TaskStatus.COMPLETED, TaskStatus.ON_HOLD, TaskStatus.CANCELLED, TaskStatus.PAUSED],
             TaskStatus.ON_HOLD: [TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED],
             TaskStatus.COMPLETED: [],
-            TaskStatus.CANCELLED: []
+            TaskStatus.CANCELLED: [],
+            TaskStatus.PAUSED: [TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED]
         }
         
         return new_status in valid_transitions.get(current_status, [])
@@ -455,3 +454,39 @@ class TaskService:
             ValidationException: If status transition is invalid
         """
         return self.update_task_status(task_id, TaskStatus.STOPPED, user)
+    
+    def pause_task(self, task_id: int, user: User) -> Task:
+        """
+        Pause a task by changing its status to 'paused'.
+        
+        Args:
+            task_id (int): ID of the task to pause
+            user (User): User pausing the task
+            
+        Returns:
+            Task: Updated task object
+            
+        Raises:
+            TaskNotFoundException: If task doesn't exist
+            PermissionDeniedException: If user doesn't have sufficient privileges
+            ValidationException: If status transition is invalid
+        """
+        return self.update_task_status(task_id, TaskStatus.PAUSED, user)
+    
+    def resume_task(self, task_id: int, user: User) -> Task:
+        """
+        Resume a paused task by changing its status back to 'in_progress'.
+        
+        Args:
+            task_id (int): ID of the task to resume
+            user (User): User resuming the task
+            
+        Returns:
+            Task: Updated task object
+            
+        Raises:
+            TaskNotFoundException: If task doesn't exist
+            PermissionDeniedException: If user doesn't have sufficient privileges
+            ValidationException: If status transition is invalid
+        """
+        return self.update_task_status(task_id, TaskStatus.IN_PROGRESS, user)

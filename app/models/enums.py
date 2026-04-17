@@ -8,6 +8,7 @@ class TaskStatus(str, Enum):
     ON_HOLD = "on_hold"
     CANCELLED = "cancelled"
     STOPPED = "stopped"
+    PAUSED = "paused"
 
 class TaskType(int, Enum):
     DUPLICATES_PROCESSING = 1,
