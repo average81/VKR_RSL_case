@@ -1,11 +1,15 @@
 import cv2
 
 def preprocess_image(img):
-    if len(img.shape) == 3:
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    if img is None:
+        return None
 
     # Удаление шума
     img = cv2.GaussianBlur(img, (3, 3), 0)
+
+    # Преобразование в оттенки серого, если цветное
+    if len(img.shape) == 3:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # Повышение контраста
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))

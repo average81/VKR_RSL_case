@@ -1,242 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
 import os
 import shutil
-import json
+from app.background_tasks import process_images_task, ACTIVE_PROCESSES
+from app import models
+from app.database import get_db, SQLALCHEMY_DATABASE_URL
+from app.api.auth import get_current_active_user
+from app.models.image import  ImageValidation, ImageMove
+import asyncio
 
-from app import database, models
-from app.database import get_db
-from app.api.auth import get_current_active_user, get_current_superuser
-from app.models.image import Image, ImageBase, ImageCreate, ImageSchema, ImageValidation, ImageMove
-from app.models.task import Task
-from app.models.user import User
-from processor.duplicates_processor import DuplicatesProcessor
-from processor.preprocess import preprocess_image
-import cv2
 import re
-import datetime
-import numpy as np
-import pandas as pd
-from repository.sql_repository import SQLProcessedRepository, Processed_table, create_sqlengine
+from datetime import datetime
 
 router = APIRouter(prefix="/images")
 
-def natural_sort_key(filename):
-    """Функция для естественной сортировки файлов по числовым значениям в имени"""
-    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', filename)]
 
-def process_images_task(
-    task_id: int,
-    input_dir: str,
-    output_dir: str,
-    db: Session,
-    config: dict
-):
-    """Фоновая задача для обработки изображений"""
-    
-    # Инициализация репозитория базы данных
-    sqlengine = create_sqlengine(config["db_path"])
-    processed_repository = SQLProcessedRepository(sqlengine)
-    
-    # Получение списка изображений
-    supported_formats = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif')
-    input_images = [
-        f for f in os.listdir(input_dir)
-        if f.lower().endswith(supported_formats)
-    ]
-    
-    # Естественная сортировка
-    input_images.sort(key=natural_sort_key)
-    
-    # Создание выходных директорий
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    
-    if not os.path.exists(os.path.join(output_dir, "duplicates")):
-        os.makedirs(os.path.join(output_dir, "duplicates"))
-    
-    # Инициализация процессора дубликатов
-    matcher = config.get("matcher", "BF")
-    extractor = config.get("feature_extractor", "KAZE")
-    Dprocessor = DuplicatesProcessor(extractor, matcher)
-    
-    # Получение уже обработанных изображений из базы данных
-    processed_images = processed_repository.get_proc_images()
-    processed_images_df = pd.DataFrame(processed_images)
-    
-    # Фильтрация входных изображений
-    if len(processed_images_df) > 0:
-        input_images = [img for img in input_images if img not in processed_images_df['filename'].values]
-    
-    # Обновление задачи
-    task = db.query(models.Task).filter(models.Task.id == task_id).first()
-    if task:
-        task.total_images = len(input_images)
-        task.status = "in_progress"
-        db.commit()
-    
-    # Основной цикл обработки
-    last_img = None
-    last_processed_image = None
-    local_duplicates = []
-    duplicate_series_name = ''
-    
-    for i, img_name in enumerate(input_images):
-        img_path = os.path.join(input_dir, img_name)
-        
-        # Чтение изображения
-        try:
-            with open(img_path, 'rb') as f:
-                file_bytes = f.read()
-            np_arr = np.frombuffer(file_bytes, np.uint8)
-            img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            
-            if img is None:
-                continue
-                
-        except Exception as e:
-            continue
-        
-        # Предварительная обработка
-        img = preprocess_image(img)
-        
-        if last_img is not None:
-            if Dprocessor.last_kp is None:
-                score = Dprocessor.compare(last_img, img, config["match_threshold"])
-            else:
-                score = Dprocessor.compare_w_last(img, config["match_threshold"])
-            
-            if score > config["duplicate_threshold"]:
-                # Обработка дубликата
-                if len(local_duplicates) == 0:
-                    # Первый дубликат в серии
-                    duplicates_dir = os.path.join(output_dir, "duplicates", last_processed_image.split(".")[0])
-                    if not os.path.exists(duplicates_dir):
-                        os.makedirs(duplicates_dir)
-                    
-                    # Перемещение основного дубликата
-                    src = os.path.join(output_dir, last_processed_image)
-                    dst = os.path.join(duplicates_dir, last_processed_image)
-                    if os.path.exists(src):
-                        shutil.move(src, dst)
-                    
-                    # Обновление записи в базе данных
-                    db_image = db.query(models.Image).filter(
-                        models.Image.filename == last_processed_image, 
-                        models.Image.task_id == task_id
-                    ).first()
-                    
-                    if db_image:
-                        db_image.is_duplicate = True
-                        db_image.is_main_duplicate = True
-                        db_image.processed_path = duplicates_dir
-                        db.commit()
-                        
-                    local_duplicates.append(last_processed_image)
-                    duplicate_series_name = last_processed_image.split(".")[0]
-                
-                # Копирование текущего дубликата
-                duplicates_dir = os.path.join(output_dir, "duplicates", duplicate_series_name)
-                dst = os.path.join(duplicates_dir, img_name)
-                shutil.copy2(img_path, dst)
-                
-                # Создание записи в базе данных
-                db_image = models.Image(
-                    filename=img_name,
-                    original_path=img_path,
-                    processed_path=duplicates_dir,
-                    task_id=task_id,
-                    is_duplicate=True,
-                    duplicate_group=last_processed_image,
-                    validation_status="pending"
-                )
-                db.add(db_image)
-                db.commit()
-                
-            else:
-                # Проверка наличия серии дубликатов
-                if len(local_duplicates) > 0:
-                    # Определение лучшего изображения из серии
-                    local_dup_imgs = []
-                    for dup_name in local_duplicates:
-                        dup_path = os.path.join(output_dir, "duplicates", duplicate_series_name, dup_name)
-                        try:
-                            with open(dup_path, 'rb') as f:
-                                file_bytes = f.read()
-                            np_arr = np.frombuffer(file_bytes, np.uint8)
-                            dup_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-                            if dup_img is not None:
-                                local_dup_imgs.append(dup_img)
-                        except:
-                            pass
-                    
-                    if len(local_dup_imgs) > 0:
-                        best_img_id = Dprocessor.get_best_quality_image(local_dup_imgs)
-                        best_img_name = local_duplicates[best_img_id]
-                        
-                        # Копирование лучшего изображения в основную директорию
-                        src = os.path.join(output_dir, "duplicates", duplicate_series_name, best_img_name)
-                        dst = os.path.join(output_dir, best_img_name)
-                        shutil.copy2(src, dst)
-                        
-                        # Обновление записи в базе данных
-                        db_image = db.query(models.Image).filter(
-                            models.Image.filename == best_img_name, 
-                            models.Image.task_id == task_id
-                        ).first()
-                        
-                        if db_image:
-                            db_image.is_main_duplicate = True
-                            db_image.processed_path = output_dir
-                            db.commit()
-                            
-                    local_duplicates = []
-                    
-                # Обработка обычного изображения
-                dst = os.path.join(output_dir, img_name)
-                shutil.copy2(img_path, dst)
-                
-                db_image = models.Image(
-                    filename=img_name,
-                    original_path=img_path,
-                    processed_path=output_dir,
-                    task_id=task_id,
-                    is_duplicate=False,
-                    validation_status="pending"
-                )
-                db.add(db_image)
-                db.commit()
-                
-        else:
-            # Первое изображение
-            dst = os.path.join(output_dir, img_name)
-            shutil.copy2(img_path, dst)
-            
-            db_image = models.Image(
-                filename=img_name,
-                original_path=img_path,
-                processed_path=output_dir,
-                task_id=task_id,
-                is_duplicate=False,
-                validation_status="pending"
-            )
-            db.add(db_image)
-            db.commit()
-            
-        last_img = img
-        last_processed_image = img_name
-        
-        # Обновление прогресса
-        if task:
-            task.progress = i + 1
-            db.commit()
-    
-    # Завершение задачи
-    if task:
-        task.status = "completed"
-        task.completed_at = datetime.now()
-        db.commit()
 
 @router.get("/task/{task_id}")
 def get_task_images(
@@ -500,12 +278,15 @@ def get_processing_progress(
 @router.post("/{task_id}/process")
 def start_image_processing(
     task_id: int,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user)
 ):
     """Запуск обработки изображений для задачи"""
     
+    # Импорт asyncio здесь, чтобы избежать проблем с импортом
+    import asyncio
+    """Запуск обработки изображений для задачи"""
+
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -516,23 +297,30 @@ def start_image_processing(
     if task.status in ["in_progress", "completed", "validated"]:
         raise HTTPException(status_code=400, detail="Task is already in progress, completed or validated")
     
-    # Загрузка конфигурации
+    # Загрузка конфигурации из TaskBase
     config = {
         "db_path": "processed_images.db",
-        "match_threshold": 0.75,
-        "duplicate_threshold": 0.7,
-        "matcher": "BF",
-        "feature_extractor": "KAZE"
+        "match_threshold": task.match_threshold_stage1 or 0.75,
+        "duplicate_threshold": task.duplicate_threshold_stage1 or 0.7,
+        "matcher": task.matcher_stage1 or "BF",
+        "feature_extractor": task.feature_extractor_stage1 or "KAZE"
     }
+    # Запуск в отдельном потоке
+    import threading
     
-    # Добавление фоновой задачи
-    background_tasks.add_task(
-        process_images_task,
-        task_id=task_id,
-        input_dir=task.input_path,
-        output_dir=task.output_path,
-        db=db,
-        config=config
-    )
+    # Создаем событие для остановки
+    shutdown_event = asyncio.Event()
     
+    # Запускаем в отдельном потоке
+    threading.Thread(target=process_images_task, kwargs={
+        "task_id": task_id,
+        "input_dir": task.input_path,
+        "output_dir": task.output_path,
+        "db_url": SQLALCHEMY_DATABASE_URL,
+        "config": config,
+        "shutdown_event": shutdown_event
+    }, daemon=True).start()
+    
+    # Сохраняем событие остановки для задачи
+    ACTIVE_PROCESSES[task_id]['shutdown_event'] = shutdown_event
     return {"status": "processing started", "task_id": task_id}

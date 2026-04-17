@@ -145,15 +145,52 @@ class TaskService:
         # Validate status transition
         if not self._is_valid_status_transition(task.status, new_status):
             raise ValidationException(f"Invalid status transition from {task.status} to {new_status}")
+
+        # Get original status before update
+        old_status = task.status
         
-        # Update task
-        task.status = new_status
-        
+
+
         # Set additional timestamps based on status
         if new_status == TaskStatus.COMPLETED:
             task.completed_at = datetime.now()
             
-        return self.task_repo.update_task(task)
+
+        
+        # Start background processing if task starts or resumes
+        if new_status == TaskStatus.IN_PROGRESS and old_status in [TaskStatus.PENDING, TaskStatus.PAUSED]:
+            from app.api.images import start_image_processing
+            
+            # Вызываем напрямую функцию обработки
+            result = start_image_processing(
+                task_id=task_id,
+                db=self.task_repo.db_session,
+                current_user=updated_by
+            )
+        
+        # Stop background processing if task is paused
+        elif new_status == TaskStatus.PAUSED and old_status == TaskStatus.IN_PROGRESS:
+            from app.background_tasks import ACTIVE_PROCESSES
+            if task_id in ACTIVE_PROCESSES:
+                process_info = ACTIVE_PROCESSES[task_id]
+                shutdown_event = process_info.get('shutdown_event')
+                db_session = process_info.get('db')
+                
+                if shutdown_event:
+                    shutdown_event.set()
+                
+                # Close database connection
+                if db_session:
+                    db_session.close()
+                
+                # Remove from active processes
+                del ACTIVE_PROCESSES[task_id]
+
+        # Update task
+        task.status = new_status
+        updated_task = self.task_repo.update_task(task)
+        
+        return updated_task
 
     def _can_user_modify_task(self, task: Task, user: User) -> bool:
         """

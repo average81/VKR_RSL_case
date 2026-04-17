@@ -84,16 +84,16 @@ class DuplicatesProcessor:
         if img2 is None:
             print("Error: Image is None")
             return 0.0
-            
+        kp1 = self.last_kp
+        features1 = self.last_features
         kp2, features2 = self.feature_extractor.extract_features(img2)
-        current_kp, current_features = kp2, features2
         
         # Сохраняем текущие признаки для следующего сравнения
-        self.last_kp = current_kp
-        self.last_features = current_features
+        self.last_kp = kp2
+        self.last_features = features2
         
         # Используем общий метод сравнения фич
-        return self.compare_features(self.last_kp, self.last_features, current_kp, current_features, threshold)
+        return self.compare_features(kp1, features1, kp2, features2, threshold)
     #Сравнение изображений по качеству и возврат наилучшего
     def get_best_quality_image(self, imgs):
         if imgs is None:

@@ -9,6 +9,7 @@ from app.models.user import User
 from app.services.task_service import TaskService
 from app.database import get_db
 from app.main import templates
+import asyncio
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
