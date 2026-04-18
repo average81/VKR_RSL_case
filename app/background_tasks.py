@@ -110,19 +110,24 @@ def process_images_task(
 
 
         # Получение уже обработанных изображений из основной базы данных
-        processed_images = db.query(models.Image.filename, models.Image.processed_path).filter(models.Image.task_id == task_id).all()
-        processed_images = pd.DataFrame(processed_images, columns=['filename', 'processed_path']) if processed_images else pd.DataFrame(columns=['filename', 'processed_path'])
+        processed_images = db.query(models.Image.filename, models.Image.processed_path,models.Image.duplicate_group).filter(models.Image.task_id == task_id).all()
+        processed_images = pd.DataFrame(processed_images, columns=['filename', 'processed_path','duplicate_group']) if processed_images else (
+            pd.DataFrame(columns=['filename', 'processed_path','duplicate_group']))
 
         last_processed_image = None
         last_img = None
+        local_duplicates = []
+        duplicate_series_name = ''
         # Фильтрация входных изображений
         if len(processed_images) > 0:
             input_images = input_images[~input_images['filename'].isin(processed_images['filename'])]
             if len(processed_images) > 0:
-                last_processed_image = processed_images.iloc[-1]['filename']
+                # Получаем последнее обработанное изображение
+                last_row = processed_images.iloc[-1]
+                last_processed_image = last_row['filename']
                 
-                img_path = os.path.join(processed_images.iloc[-1]['processed_path'], last_processed_image)
-                # Чтение изображения
+                # Формируем путь к изображению и загружаем его
+                img_path = os.path.join(last_row['processed_path'], last_processed_image)
                 try:
                     with open(img_path, 'rb') as f:
                         file_bytes = f.read()
@@ -135,7 +140,21 @@ def process_images_task(
                 except Exception as e:
                     logging.error(f"Error reading the previous main duplicated image at path {img_path}: {str(e)}")
 
+                # Инициализация local_duplicates на основе последней группы дубликатов
+                duplicate_group = db.query(models.Image.duplicate_group).filter(
+                    models.Image.duplicate_group == last_row['duplicate_group']
+                ).first()
 
+                if duplicate_group and duplicate_group[0]:  # Если последнее изображение было дубликатом
+                    # Получаем все изображения из той же группы дубликатов
+                    group_images = db.query(models.Image.filename).filter(
+                        (models.Image.duplicate_group == duplicate_group[0]) | (models.Image.filename == duplicate_group[0]),
+                        models.Image.task_id == task_id
+                    ).all()
+                    local_duplicates = [img[0] for img in group_images]
+                    duplicate_series_name = last_row['duplicate_group'].split('.')[0]
+
+        print(local_duplicates,duplicate_series_name)
         # Обновление задачи
         task = db.query(models.Task).filter(models.Task.id == task_id).first()
         if task:
@@ -146,8 +165,8 @@ def process_images_task(
         # Основной цикл обработки
 
 
-        local_duplicates = []
-        duplicate_series_name = ''
+
+
         print(len(input_images))
         for i in input_images.index:
             img_name = input_images.loc[i, 'filename']
@@ -229,6 +248,7 @@ def process_images_task(
                         local_dup_imgs = []
                         for dup_name in local_duplicates:
                             dup_path = os.path.join(output_dir, "duplicates", duplicate_series_name, dup_name)
+                            print(dup_path)
                             try:
                                 with open(dup_path, 'rb') as f:
                                     file_bytes = f.read()
