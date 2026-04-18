@@ -257,7 +257,7 @@
                 </div>
             </div>
             {% endif %}
-            
+
             <!-- Статистика по этапу 2 -->
             {% if task.stage == 2 %}
             <div class="col-md-4">
@@ -280,39 +280,19 @@
             </div>
             {% endif %}
         </div>
-        
+
         <!-- График прогресса -->
         <div class="mt-4">
             <h6>Динамика обработки</h6>
-            <div id="progressChartContainer" style="position: relative; height: 100px;">
-                <canvas id="progressChart" height="100"></canvas>
+            <div id="progressChartContainer" style="position: relative; height: 250px;">
+                <canvas id="progressChart" height="250"></canvas>
                 <div id="chartMessage" class="text-muted fst-italic small" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
                     Данные о динамике обработки появятся после начала обработки изображений
                 </div>
             </div>
         </div>
-        
-        <!-- Последние события -->
-        <div class="mt-4">
-            <h6>Последние события</h6>
-            <div class="list-group list-group-flush">
-                {% for event in recent_events %}
-                <div class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                        <small class="text-muted">{{ event.timestamp.strftime('%H:%M:%S') }}</small>
-                        <div class="fw-medium">{{ event.message }}</div>
-                    </div>
-                    <span class="badge bg-{{ 'primary' if event.level == 'INFO' else 'warning' if event.level == 'WARNING' else 'danger' }} rounded-pill">
-                        {{ event.level }}
-                    </span>
-                </div>
-                {% else %}
-                <div class="list-group-item text-center text-muted">
-                    <i class="bi bi-info-circle"></i> События отсутствуют
-                </div>
-                {% endfor %}
-            </div>
-        </div>
+
+
     </div>
 </div>
     {% endif %}

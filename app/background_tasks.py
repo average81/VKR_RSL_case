@@ -34,7 +34,7 @@ def update_task_status(task_id: int, status: str, db: Session = None):
         task = db.query(Task).filter(Task.id == task_id).first()
         if task:
             task.status = status
-            task.updated_at = datetime.utcnow()
+            task.updated_at = datetime.now()
             db.commit()
             db.refresh(task)
         
@@ -226,6 +226,7 @@ def process_images_task(
                     shutil.copy2(img_path, dst)
 
                     # Создание записи в базе данных
+                    current_time = datetime.now()
                     db_image = models.Image(
                         filename=img_name,
                         original_path=img_path,
@@ -233,7 +234,9 @@ def process_images_task(
                         task_id=task_id,
                         is_duplicate=True,
                         duplicate_group=duplicate_series_name,
-                        validation_status="pending"
+                        validation_status="pending",
+                        created_at=current_time,
+                        updated_at=current_time
                     )
                     db.add(db_image)
                     db.commit()
@@ -282,13 +285,16 @@ def process_images_task(
                     dst = os.path.join(output_dir, img_name)
                     shutil.copy2(img_path, dst)
 
+                    current_time = datetime.now()
                     db_image = models.Image(
                         filename=img_name,
                         original_path=img_path,
                         processed_path=output_dir,
                         task_id=task_id,
                         is_duplicate=False,
-                        validation_status="pending"
+                        validation_status="pending",
+                        created_at=current_time,
+                        updated_at=current_time
                     )
                     db.add(db_image)
                     db.commit()
@@ -298,13 +304,16 @@ def process_images_task(
                 dst = os.path.join(output_dir, img_name)
                 shutil.copy2(img_path, dst)
 
+                current_time = datetime.now()
                 db_image = models.Image(
                     filename=img_name,
                     original_path=img_path,
                     processed_path=output_dir,
                     task_id=task_id,
                     is_duplicate=False,
-                    validation_status="pending"
+                    validation_status="pending",
+                    created_at=current_time,
+                    updated_at=current_time
                 )
                 db.add(db_image)
                 db.commit()
@@ -328,10 +337,11 @@ def process_images_task(
 
         logger.info(f"End processing")
         # Завершение задачи
-        """if task:
+        if task:
             task.status = "completed"
             task.completed_at = datetime.now()
-            db.commit()"""
+            task.updated_at = datetime.now()
+            db.commit()
     finally:
         db.close()  # Важно закрыть!
 

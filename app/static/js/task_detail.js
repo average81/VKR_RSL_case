@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     labels: labels,
                     datasets: [{
                         label: 'Обработано изображений',
-                        data: data.map(item => item.processed_images),
+                        data: data.map(item => item.progress),
                         borderColor: 'rgb(75, 192, 192)',
                         tension: 0.1,
                         fill: false
@@ -30,16 +30,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
                 
                 if (chart) {
-                    // Обновляем существующий график
-                    chart.data = chartData;
-                    chart.update();
+                    // Обновляем только данные, чтобы избежать дерганий
+                    chart.data.labels = labels;
+                    chart.data.datasets[0].data = data.map(item => item.progress);
+                    chart.update('quiet'); // 'quiet' подавляет повторные анимации
                 } else {
-                    // Создаем новый график
+                    // Создаём новый график
                     const config = {
                         type: 'line',
                         data: chartData,
                         options: {
                             responsive: true,
+                            maintainAspectRatio: false,
+                            animation: {
+                                duration: 300, // плавная анимация при изменении данных
+                                easing: 'easeInOutCubic'
+                            },
                             plugins: {
                                 legend: {
                                     display: false
@@ -112,25 +118,37 @@ document.addEventListener('DOMContentLoaded', function() {
                         uniqueImages.textContent = data.total - data.duplicates_found;
                     }
                     
-                    // Обновляем график, если есть данные о прогрессе
-                    if (data.timestamp && data.processed) {
-                        if (!window.taskData.progressHistory) window.taskData.progressHistory = [];
+                    // Обновляем график, используя данные о прогрессе
+                    if (!window.taskData.progressHistory) window.taskData.progressHistory = [];
+                    
+                    // Получаем последнее значение progress
+                    const lastProgress = window.taskData.progressHistory.length > 0 ? window.taskData.progressHistory[window.taskData.progressHistory.length - 1].progress : -1;
+                    
+                    // Добавляем новую точку только если количество обработанных изображений изменилось
+                    if (data.processed !== lastProgress) {
                         window.taskData.progressHistory.push({
                             timestamp: new Date().toISOString(),
-                            processed_images: data.processed
+                            progress: data.processed
                         });
                         
                         // Ограничиваем количество точек для производительности
                         if (window.taskData.progressHistory.length > 100) {
                             window.taskData.progressHistory = window.taskData.progressHistory.slice(-100);
                         }
-                        
+                        // Обновляем график с новыми данными
                         updateChart(window.taskData.progressHistory);
                     }
+                    
+
                     
                     // Продолжаем обновлять, если обработка еще не завершена
                     if (data.progress_percent < 100) {
                         setTimeout(refreshProgress, 2000);
+                    } else {
+                        // При достижении 100% обновляем страницу
+                        setTimeout(() => {
+                            //location.reload();
+                        }, 1000);
                     }
                 }
             } catch (error) {
@@ -149,71 +167,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 });
 
-// Функция для обновления графика
-function updateChart(data) {
-    // Проверяем, есть ли данные для графика
-    if (data.length > 0) {
-        // Отображаем график и скрываем сообщение
-        const chartMessage = document.getElementById('chartMessage');
-        if (chartMessage) {
-            chartMessage.style.display = 'none';
-        }
-        
-        const labels = data.map(item => {
-            const date = new Date(item.timestamp);
-            return date.toLocaleTimeString();
-        });
-        
-        const chartData = {
-            labels: labels,
-            datasets: [{
-                label: 'Обработано изображений',
-                data: data.map(item => item.processed_images),
-                borderColor: 'rgb(75, 192, 192)',
-                tension: 0.1,
-                fill: false
-            }]
-        };
-        
-        if (window.chart) {
-            // Обновляем существующий график
-            window.chart.data = chartData;
-            window.chart.update();
-        } else {
-            // Создаем новый график
-            const ctx = document.getElementById('progressChart');
-            if (ctx) {
-                const config = {
-                    type: 'line',
-                    data: chartData,
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            legend: {
-                                display: false
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    stepSize: 1
-                                }
-                            }
-                        }
-                    }
-                };
-                window.chart = new Chart(ctx, config);
-            }
-        }
-    } else {
-        // Оставляем сообщение о том, что данные будут после начала обработки
-        const chartMessage = document.getElementById('chartMessage');
-        if (chartMessage) {
-            chartMessage.style.display = 'block';
-        }
-    }
-}
 
 // Функция для паузы обработки
 async function pauseProcessing(taskId) {
