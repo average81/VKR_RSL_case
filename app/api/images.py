@@ -242,30 +242,25 @@ def get_processing_progress(
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     # Получаем общее количество изображений в задаче
-    total_images = db.query(models.Image).filter(models.Image.task_id == task_id).count()
-    
-    # Получаем количество обработанных изображений (валидированных)
-    processed_images = db.query(models.Image).filter(
-        models.Image.task_id == task_id,
-        models.Image.is_validated == True
-    ).count()
-    
+    total_images = task.total_images
+    processed_images = task.progress
+
     # Получаем количество найденных дубликатов
     duplicates_found = db.query(models.Image).filter(
         models.Image.task_id == task_id,
-        models.Image.is_duplicate == True
+        models.Image.is_duplicate == True,
+        models.Image.is_main_duplicate == False
     ).count()
-    
+
     # Получаем количество кластеров (уникальных групп дубликатов)
     clusters_found = db.query(models.Image.duplicate_group).filter(
         models.Image.task_id == task_id,
         models.Image.duplicate_group.isnot(None)
     ).distinct().count() or 0
-    
     # Вычисляем процент прогресса
     progress_percent = 0
     if total_images > 0:
-        progress_percent = round((processed_images / total_images) * 100, 2)
+        progress_percent = int((processed_images / total_images) * 100)
     
     return {
         "total": total_images,

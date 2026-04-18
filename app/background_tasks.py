@@ -71,9 +71,6 @@ def process_images_task(
     ACTIVE_PROCESSES[task_id] = {'shutdown_event': shutdown_event, 'db': db}
     """Фоновая задача для обработки изображений"""
     try:
-        # Инициализация репозитория базы данных
-        sqlengine = create_sqlengine(config["db_path"])
-        processed_repository = SQLProcessedRepository(sqlengine)
 
         # Получение списка изображений
         supported_formats = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif')
@@ -158,7 +155,7 @@ def process_images_task(
         # Обновление задачи
         task = db.query(models.Task).filter(models.Task.id == task_id).first()
         if task:
-            task.total_images = len(input_images)
+            #task.total_images = len(input_images)
             task.status = "in_progress"
             db.commit()
 
@@ -235,7 +232,7 @@ def process_images_task(
                         processed_path=duplicates_dir,
                         task_id=task_id,
                         is_duplicate=True,
-                        duplicate_group=last_processed_image,
+                        duplicate_group=duplicate_series_name,
                         validation_status="pending"
                     )
                     db.add(db_image)

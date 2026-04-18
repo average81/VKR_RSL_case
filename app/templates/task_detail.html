@@ -240,19 +240,19 @@
             {% if task.stage == 1 %}
             <div class="col-md-4">
                 <div class="text-center p-3 border rounded">
-                    <div class="h4 mb-1 text-primary">{{ stats.duplicate_groups or 0 }}</div>
+                    <div id="duplicateGroups" class="h4 mb-1 text-primary">{{ stats.duplicate_groups or 0 }}</div>
                     <div class="small text-muted">Групп дубликатов</div>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="text-center p-3 border rounded">
-                    <div class="h4 mb-1 text-warning">{{ stats.duplicate_images or 0 }}</div>
+                    <div id="duplicateImages" class="h4 mb-1 text-warning">{{ stats.duplicate_images or 0 }}</div>
                     <div class="small text-muted">Дублирующихся изображений</div>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="text-center p-3 border rounded">
-                    <div class="h4 mb-1 text-success">{{ stats.unique_images or 0 }}</div>
+                    <div id="uniqueImages" class="h4 mb-1 text-success">{{ stats.unique_images or 0 }}</div>
                     <div class="small text-muted">Уникальных изображений</div>
                 </div>
             </div>
@@ -262,19 +262,19 @@
             {% if task.stage == 2 %}
             <div class="col-md-4">
                 <div class="text-center p-3 border rounded">
-                    <div class="h4 mb-1 text-primary">{{ stats.issues or 0 }}</div>
+                    <div id="issues" class="h4 mb-1 text-primary">{{ stats.issues or 0 }}</div>
                     <div class="small text-muted">Выпусков</div>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="text-center p-3 border rounded">
-                    <div class="h4 mb-1 text-info">{{ stats.images_in_issues or 0 }}</div>
+                    <div id="imagesInIssues" class="h4 mb-1 text-info">{{ stats.images_in_issues or 0 }}</div>
                     <div class="small text-muted">Изображений в выпусках</div>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="text-center p-3 border rounded">
-                    <div class="h4 mb-1 text-danger">{{ stats.unassigned_images or 0 }}</div>
+                    <div id="unassignedImages" class="h4 mb-1 text-danger">{{ stats.unassigned_images or 0 }}</div>
                     <div class="small text-muted">Не распределено</div>
                 </div>
             </div>
@@ -327,6 +327,7 @@
         taskId: {{ task.id }},
         progressHistory: {{ progress_history|tojson }}
     };
+
 </script>
 <script src="/static/js/task_detail.js"></script>
 {% endif %}
