@@ -13,6 +13,7 @@ from app import database, models
 from app.database import get_db
 from app.models.user import UserBase, UserSchema, UserCreate
 from app.models.task import Task
+from app.models.enums import  TaskStatus
 from app.models.image import Image
 from app.models import User
 from app.settings import settings
@@ -26,25 +27,31 @@ security = HTTPBearer(auto_error=False)
 async def get_current_user_optional(
         request: Request,
         response: Response,
-        credentials: HTTPAuthorizationCredentials = Depends(security),
         db: Session = Depends(get_db)
 ):
-    if credentials:
-        try:
-            payload = jwt.decode(credentials.credentials, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-            username: str = payload.get("sub")
-            if username is None:
-                return None
-            user = get_user(db, username=username)
-            if user is None:
-                # Удаляем cookie, если пользователь не найден
-                response.delete_cookie(key="access_token")
-            return user
-        except JWTError:
-            # Удаляем cookie при ошибке декодирования токена
-            response.delete_cookie(key="access_token")
+    # Получаем токен из cookie
+    token = request.cookies.get("access_token")
+    if not token:
+        return None
+    
+    # Убираем префикс "Bearer " если он есть
+    if token.startswith("Bearer "):
+        token = token[7:]
+    
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
             return None
-    return None
+        user = get_user(db, username=username)
+        if user is None:
+            # Удаляем cookie, если пользователь не найден
+            response.delete_cookie(key="access_token")
+        return user
+    except JWTError:
+        # Удаляем cookie при ошибке декодирования токена
+        response.delete_cookie(key="access_token")
+        return None
 
 router = APIRouter(prefix="/auth")
 
@@ -196,11 +203,11 @@ def login_for_access_token(
     task_service = TaskService(db)
     user_tasks = task_service.get_user_tasks(user.id, user)
     
-    # Переводим все запущенные задачи в статус "ожидание"
+    # Переводим все запущенные задачи в статус "приостановлена"
     for task in user_tasks:
         if task.status == "in_progress":
             try:
-                task_service.update_task_status(task.id, "pending", user)
+                task_service.update_task_status(task.id, TaskStatus.CANCELLED, user)
                 print(f"Задача {task.id} переведена в статус 'ожидание'")
             except Exception as e:
                 print(f"Ошибка при обновлении статуса задачи {task.id}: {str(e)}")
@@ -304,9 +311,19 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
 @router.get("/profile", response_class=HTMLResponse)
 def get_user_profile(
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(get_current_user_optional)
 ):
+    """
+    Получение профиля пользователя с статистикой по задачам.
+    """
+    # Проверяем аутентификацию
+    if not current_user:
+        # Создаем ответ с перенаправлением и удаляем cookie
+        redirect_response = RedirectResponse(url="/auth/login", status_code=303)
+        redirect_response.delete_cookie(key="access_token")
+        return redirect_response
     """
     Получение профиля пользователя с статистикой по задачам.
     """

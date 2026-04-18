@@ -1,6 +1,7 @@
 /*
  * Client-side JavaScript for VKR_RSL_case web interface
  * Implements functionality for task management, image processing and validation
+ * Includes authentication check to redirect to login page when session expires
  */
 
 // Global variables
@@ -10,6 +11,7 @@ let progressInterval = null;
 // Initialize page on load
 document.addEventListener('DOMContentLoaded', function() {
     initializePage();
+    setupAuthCheck();
 });
 
 /**
@@ -32,6 +34,75 @@ function initializePage() {
         setupValidateStage2Page();
     } else if (body.id === 'settings-page') {
         setupSettingsPage();
+    }
+}
+
+/**
+ * Setup authentication check for all button clicks
+ * When a user clicks any button, check if authentication is still valid
+ * If not, redirect to login page
+ */
+function setupAuthCheck() {
+    // Add event listener to document to catch all button clicks
+    document.addEventListener('click', async function(e) {
+        // Check if the clicked element is a button or has button role
+        const isButton = e.target.tagName === 'BUTTON' || 
+                        e.target.type === 'button' || 
+                        e.target.getAttribute('role') === 'button' ||
+                        e.target.closest('button') !== null;
+        
+        if (!isButton) {
+            return; // Not a button click, ignore
+        }
+        
+        // Don't check authentication on login page
+        if (document.body.id === 'login-page') {
+            return;
+        }
+        
+        // Check authentication status
+        const isAuthenticated = await checkAuth();
+        
+        if (!isAuthenticated) {
+            // Redirect to login page
+            window.location.href = '/auth/login';
+            return;
+        }
+    });
+}
+
+/**
+ * Check if user is still authenticated by making a request to a protected endpoint
+ * @returns {Promise<boolean>} True if authenticated, false otherwise
+ */
+async function checkAuth() {
+    try {
+        // Make a request to a protected endpoint that returns 401 if not authenticated
+        const response = await fetch('/tasks/', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            // Don't include credentials explicitly as they are sent automatically with cookies
+            credentials: 'include'
+        });
+        
+        // If we get a redirect response, it means we're not authenticated
+        if (response.redirected && response.url.includes('/auth/login')) {
+            return false;
+        }
+        
+        // If we get 401 or 403, user is not authenticated
+        if (response.status === 401 || response.status === 403) {
+            return false;
+        }
+        
+        // For any other status, assume authenticated (even if there's an error, it means the user is authenticated but might have other issues)
+        return true;
+    } catch (error) {
+        console.error('Error checking authentication:', error);
+        // In case of network error, assume not authenticated to be safe
+        return false;
     }
 }
 

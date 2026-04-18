@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.api.auth import get_current_user
+from app.api.auth import get_current_user, get_current_user_optional
 from app.database import get_db
 from app.models.user import User
 
@@ -23,9 +23,27 @@ def check_superuser(current_user: User = Depends(get_current_user)):
 @router.get("/", response_class=HTMLResponse)
 def get_admin_panel(
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_superuser)
+    current_user: User = Depends(get_current_user_optional)
 ):
+    """
+    Панель администратора для управления пользователями.
+    Доступна только суперпользователям.
+    """
+    # Проверяем аутентификацию
+    if not current_user:
+        # Создаем ответ с перенаправлением и удаляем cookie
+        redirect_response = RedirectResponse(url="/auth/login", status_code=303)
+        redirect_response.delete_cookie(key="access_token")
+        return redirect_response
+    
+    # Проверяем права суперпользователя
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Только суперпользователи могут выполнять это действие"
+        )
     users = db.query(User).all()
     return templates.TemplateResponse(
         name="admin.html",

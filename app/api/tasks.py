@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response, Form
 from starlette.responses import RedirectResponse
 from typing import List
 
-from app.api.auth import get_current_user, check_group_leader, check_task_access
+from app.api.auth import get_current_user, get_current_user_optional, check_group_leader, check_task_access
 from app.models.task import Task, TaskCreate, TaskSchema
 from app.models.enums import TaskType
 from app.models.user import User
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
 @router.get("/")
-async def get_tasks(request: Request, current_user = Depends(get_current_user), db = Depends(get_db)):
+async def get_tasks(request: Request, response: Response, current_user = Depends(get_current_user_optional), db = Depends(get_db)):
     """
     Получение списка всех задач.
     Для начальника группы - все задачи, для сотрудника - только его задачи.
@@ -105,7 +105,18 @@ async def get_tasks(request: Request, current_user = Depends(get_current_user), 
 
 
 @router.get("/{task_id}")
-async def get_task(request: Request, task_id: int, current_user = Depends(get_current_user), db = Depends(get_db)):
+async def get_task(request: Request, response: Response, task_id: int, current_user = Depends(get_current_user_optional), db = Depends(get_db)):
+    """
+    Получение задачи по ID.
+    Возвращает страницу с описанием задачи, если задача найдена и есть права доступа.
+    В противном случае возвращает сообщение об ошибке или перенаправляет на страницу входа.
+    """
+    # Проверяем аутентификацию
+    if not current_user:
+        # Создаем ответ с перенаправлением и удаляем cookie
+        redirect_response = RedirectResponse(url="/auth/login", status_code=303)
+        redirect_response.delete_cookie(key="access_token")
+        return redirect_response
     """
     Получение задачи по ID.
     Возвращает страницу с описанием задачи, если задача найдена и есть права доступа.
