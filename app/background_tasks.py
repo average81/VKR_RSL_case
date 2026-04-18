@@ -109,33 +109,32 @@ def process_images_task(
         #Убираем уже обработанные изображения из списка
 
 
-        # Получение уже обработанных изображений из базы данных
-        processed_images = processed_repository.get_proc_images()
-        processed_images = pd.DataFrame(processed_images)
-
+        # Получение уже обработанных изображений из основной базы данных
+        processed_images = db.query(models.Image.filename, models.Image.processed_path).filter(models.Image.task_id == task_id).all()
+        processed_images = pd.DataFrame(processed_images, columns=['filename', 'processed_path']) if processed_images else pd.DataFrame(columns=['filename', 'processed_path'])
 
         last_processed_image = None
-        last_processed_image_path = ""
+        last_img = None
         # Фильтрация входных изображений
         if len(processed_images) > 0:
-            processed_images = processed_images[processed_images['tasks.id']==task_id]
-            input_images = [img for img in input_images if img not in processed_images['filename'].values]
-            last_processed_image = processed_images.iloc[-1]['filename']
-        else:
-            # Добавляем строку с первой записью
-            last_processed_image = input_images.iloc[0]['filename']
-            db_image = models.Image(
-                filename=input_images.loc[0,'filename'],
-                original_path=input_dir,
-                processed_path=output_dir,
-                task_id=task_id,
-                is_duplicate=False,
-                duplicate_group=None,
-                validation_status="pending"
-            )
-            db.add(db_image)
-            db.commit()
-        last_img = None
+            input_images = input_images[~input_images['filename'].isin(processed_images['filename'])]
+            if len(processed_images) > 0:
+                last_processed_image = processed_images.iloc[-1]['filename']
+                
+                img_path = os.path.join(processed_images.iloc[-1]['processed_path'], last_processed_image)
+                # Чтение изображения
+                try:
+                    with open(img_path, 'rb') as f:
+                        file_bytes = f.read()
+                    np_arr = np.frombuffer(file_bytes, np.uint8)
+                    last_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+                    if last_img is None:
+                        logging.error(f"Failed to decode image at path '{img_path}'. Skipping.")
+                    
+                except Exception as e:
+                    logging.error(f"Error reading the previous main duplicated image at path {img_path}: {str(e)}")
+
 
         # Обновление задачи
         task = db.query(models.Task).filter(models.Task.id == task_id).first()

@@ -207,7 +207,7 @@ def login_for_access_token(
     for task in user_tasks:
         if task.status == "in_progress":
             try:
-                task_service.update_task_status(task.id, TaskStatus.CANCELLED, user)
+                task_service.update_task_status(task.id, TaskStatus.PAUSED, user)
                 print(f"Задача {task.id} переведена в статус 'ожидание'")
             except Exception as e:
                 print(f"Ошибка при обновлении статуса задачи {task.id}: {str(e)}")
