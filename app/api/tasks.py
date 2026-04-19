@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Response, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response, Form, Body
 from starlette.responses import RedirectResponse
-from typing import List
+from typing import List, Dict, Any, Optional
+import json
+
+from pydantic import BaseModel
 
 from app.api.auth import get_current_user, get_current_user_optional, check_group_leader, check_task_access
 from app.models.task import Task, TaskCreate, TaskSchema
@@ -208,6 +211,7 @@ async def get_task(request: Request, response: Response, task_id: int, current_u
             "progress_history": progress_history
         }
     )
+
 
 
 @router.post("/", response_model=TaskSchema, status_code=status.HTTP_201_CREATED)
@@ -439,4 +443,122 @@ async def resume_task(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     return task_service.resume_task(task_id, current_user)
+
+
+# Region Processing Settings Handlers
+@router.get("/settings/{task_id}")
+async def get_processing_settings(
+    request: Request,
+    task_id: int,
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
+):
+    """
+    Отображение страницы настроек обработки
+    """
+    task_service = TaskService(db)
+    task = task_service.get_task_by_id(task_id, current_user)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    if not check_task_access(request, current_user, task):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    # Default settings
+    default_settings = {
+        "feature_detector": "SIFT",
+        "matcher": "FLANN",
+        "match_threshold": 0.7,
+        "duplicate_threshold": 0.8,
+        "duplicate_quality": "BRISQUE",
+        "clusterfeatureDetector": "SIFT",
+        "clustermatcher": "FLANN",
+        "cluster_threshold": 0.5,
+        "clustermatchThreshold": 0.7
+    }
+
+    # Get saved settings from task
+    settings = default_settings
+    if task:
+        # Map database fields to frontend settings
+        db_to_frontend = {
+            'feature_extractor_stage1': 'feature_detector',
+            'feature_extractor_stage2': 'clusterfeatureDetector',
+            'matcher_stage1': 'matcher',
+            'matcher_stage2': 'clustermatcher',
+            'match_threshold_stage1': 'match_threshold',
+            'duplicate_threshold_stage1': 'duplicate_threshold',
+            'duplicate_threshold_stage2': 'clustermatchThreshold',
+            'quality_algorithm': 'duplicate_quality'
+        }
+        
+        # Apply values from database fields if they exist
+        for db_field, frontend_field in db_to_frontend.items():
+            db_value = getattr(task, db_field, None)
+            if db_value is not None and frontend_field in settings:
+                settings[frontend_field] = db_value
+
+    return templates.TemplateResponse(
+        request=request,
+        name="processing_settings.html",
+        context={
+            "request": request,
+            "current_user": current_user,
+            "task": task,
+            "settings": settings
+        }
+    )
+
+class ProcessingSettings(BaseModel):
+    feature_detector: str = "SIFT"
+    matcher: str = "FLANN"
+    match_threshold: float = 0.7
+    duplicate_threshold: float = 0.8
+    duplicate_quality: str = "BRISQUE"
+    clusterfeatureDetector: str = "SIFT"
+    clustermatcher: str = "FLANN"
+    cluster_threshold: float = 0.5
+    clustermatchThreshold: float = 0.7
+
+@router.post("/settings/{task_id}")
+async def save_processing_settings(
+    request: Request,
+    task_id: int,
+    settings: ProcessingSettings,
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
+):
+    """
+    Сохранение настроек обработки
+    """
+    task_service = TaskService(db)
+    task = task_service.get_task_by_id(task_id, current_user)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    if not check_task_access(request, current_user, task):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    # Map frontend settings to database fields
+    frontend_to_db = {
+        'feature_detector': 'feature_extractor_stage1',
+        'matcher': 'matcher_stage1',
+        'match_threshold': 'match_threshold_stage1',
+        'duplicate_threshold': 'duplicate_threshold_stage1',
+        'duplicate_quality': 'quality_algorithm',
+        'clusterfeatureDetector': 'feature_extractor_stage2',
+        'clustermatcher': 'matcher_stage2',
+        'cluster_threshold': 'cluster_threshold',
+        'clustermatchThreshold': 'duplicate_threshold_stage2'
+    }
+    
+    # Apply settings to task model fields
+    for frontend_field, db_field in frontend_to_db.items():
+        if hasattr(task, db_field):
+            setattr(task, db_field, getattr(settings, frontend_field))
+    
+    db.commit()
+    db.refresh(task)
+    
+    return {"message": "Настройки успешно сохранены"}
 

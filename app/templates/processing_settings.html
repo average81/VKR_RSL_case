@@ -15,105 +15,10 @@
     </div>
 </div>
 
-<!-- Прогресс обработки -->
-<div class="card mb-4">
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-3">
-                <div class="text-center">
-                    <div class="h4 mb-0">100%</div>
-                    <small class="text-muted">Настройка параметров</small>
-                </div>
-            </div>
-            <div class="col-md-9">
-                <div class="d-flex justify-content-between mb-1">
-                    <small>Прогресс</small>
-                    <small>100%</small>
-                </div>
-                <div class="progress" style="height: 6px;">
-                    <div class="progress-bar bg-success" role="progressbar" style="width: 100%"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Форма настроек -->
 <form id="processingSettingsForm">
     <div class="row">
-        <!-- Алгоритмы вычисления признаков -->
-        <div class="col-md-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">Вычисление признаков</h5>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label for="featureDetector" class="form-label">Детектор признаков</label>
-                        <select class="form-select" id="featureDetector" name="feature_detector">
-                            <option value="sift" {{ 'selected' if settings.feature_detector == 'sift' }}>SIFT (Scale-Invariant Feature Transform)</option>
-                            <option value="surf" {{ 'selected' if settings.feature_detector == 'surf' }}>SURF (Speeded-Up Robust Features)</option>
-                            <option value="orb" {{ 'selected' if settings.feature_detector == 'orb' }}>ORB (Oriented FAST and Rotated BRIEF)</option>
-                            <option value="akaze" {{ 'selected' if settings.feature_detector == 'akaze' }}>AKAZE (Accelerated-KAZE)</option>
-                        </select>
-                        <div class="form-text">Алгоритм обнаружения ключевых точек на изображении</div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="descriptorExtractor" class="form-label">Экстрактор дескрипторов</label>
-                        <select class="form-select" id="descriptorExtractor" name="descriptor_extractor">
-                            <option value="sift" {{ 'selected' if settings.descriptor_extractor == 'sift' }}>SIFT</option>
-                            <option value="surf" {{ 'selected' if settings.descriptor_extractor == 'surf' }}>SURF</option>
-                            <option value="orb" {{ 'selected' if settings.descriptor_extractor == 'orb' }}>ORB</option>
-                            <option value="akaze" {{ 'selected' if settings.descriptor_extractor == 'akaze' }}>AKAZE</option>
-                            <option value="brief" {{ 'selected' if settings.descriptor_extractor == 'brief' }}>BRIEF (Binary Robust Independent Elementary Features)</option>
-                        </select>
-                        <div class="form-text">Алгоритм вычисления дескрипторов для ключевых точек</div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="featureThreshold" class="form-label">Порог чувствительности ({{ settings.feature_threshold }})</label>
-                        <input type="range" class="form-range" id="featureThreshold" name="feature_threshold" 
-                               min="100" max="1000" step="50" value="{{ settings.feature_threshold }}">
-                        <div class="form-text">Чем выше значение, тем больше ключевых точек будет обнаружено</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Алгоритмы сопоставления признаков -->
-        <div class="col-md-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">Сопоставление признаков</h5>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label for="matcher" class="form-label">Алгоритм сопоставления</label>
-                        <select class="form-select" id="matcher" name="matcher">
-                            <option value="flann" {{ 'selected' if settings.matcher == 'flann' }}>FLANN (Fast Library for Approximate Nearest Neighbors)</option>
-                            <option value="brute_force" {{ 'selected' if settings.matcher == 'brute_force' }}>Brute Force (поиск по всем парам)</option>
-                            <option value="knn" {{ 'selected' if settings.matcher == 'knn' }}>KNN (k-Nearest Neighbors)</option>
-                        </select>
-                        <div class="form-text">Метод поиска соответствий между дескрипторами</div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="matchThreshold" class="form-label">Порог сопоставления ({{ settings.match_threshold }})</label>
-                        <input type="range" class="form-range" id="matchThreshold" name="match_threshold" 
-                               min="0.5" max="1.0" step="0.1" value="{{ settings.match_threshold }}">
-                        <div class="form-text">Минимальное отношение расстояний для валидации соответствий</div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="minMatches" class="form-label">Минимальное количество соответствий ({{ settings.min_matches }})</label>
-                        <input type="range" class="form-range" id="minMatches" name="min_matches" 
-                               min="5" max="50" step="5" value="{{ settings.min_matches }}">
-                        <div class="form-text">Минимальное количество соответствий для считать изображения похожими</div>
-                    </div>
-                </div>
-            </div>
-        </div>
 
         <!-- Алгоритмы и пороги для дубликатов -->
         <div class="col-md-6 mb-4">
@@ -122,29 +27,52 @@
                     <h5 class="mb-0">Обнаружение дубликатов</h5>
                 </div>
                 <div class="card-body">
-                    <div class="mb-3">
-                        <label for="duplicateQuality" class="form-label">Алгоритм качества дубликатов</label>
-                        <select class="form-select" id="duplicateQuality" name="duplicate_quality">
-                            <option value="geometric" {{ 'selected' if settings.duplicate_quality == 'geometric' }}>Геометрический (RANSAC + гомография)</option>
-                            <option value="similarity" {{ 'selected' if settings.duplicate_quality == 'similarity' }}>На основе схожести</option>
-                            <option value="combined" {{ 'selected' if settings.duplicate_quality == 'combined' }}>Комбинированный</option>
-                        </select>
-                        <div class="form-text">Метод оценки качества соответствия между изображениями</div>
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Вычисление признаков</h5>
                     </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="featureDetector" class="form-label">Детектор признаков</label>
+                            <select class="form-select" id="featureDetector" name="feature_detector">
+                                <option value="SIFT" {{ 'selected' if settings.feature_detector == 'SIFT' }}>SIFT (Scale-Invariant Feature Transform)</option>
+                                <option value="KAZE" {{ 'selected' if settings.feature_detector == 'KAZE' }}>KAZE</option>
+                                <option value="ORB" {{ 'selected' if settings.feature_detector == 'ORB' }}>ORB (Oriented FAST and Rotated BRIEF)</option>
+                                <option value="AKAZE" {{ 'selected' if settings.feature_detector == 'AKAZE' }}>AKAZE (Accelerated-KAZE)</option>
+                            </select>
+                            <div class="form-text">Алгоритм обнаружения ключевых точек на изображении</div>
+                        </div>
 
+                    </div>
+                    <div class="mb-3">
+                        <label for="matcher" class="form-label">Алгоритм сопоставления</label>
+                        <select class="form-select" id="matcher" name="matcher">
+                            <option value="FLANN" {{ 'selected' if settings.matcher == 'FLANN' }}>FLANN (Fast Library for Approximate Nearest Neighbors)</option>
+                            <option value="BF" {{ 'selected' if settings.matcher == 'BF' }}>Brute Force (поиск по всем парам)</option>
+                        </select>
+                        <div class="form-text">Метод поиска соответствий между дескрипторами</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="duplicatequality" class="form-label">Алгоритм расчета качества среди дубликатов</label>
+                    <select class="form-select" id="duplicatequality" name="duplicatequality">
+                        <option value="BRISQUE" {{ 'selected' if settings.duplicatequality == 'brisque' }}>BRISQUE (Blind/referenceless image spatial quality
+                        evaluator)</option>
+                    </select>
+                    <div class="form-text">Метод определения лучшего среди дубликатов</div>
+                </div>
                     <div class="mb-3">
                         <label for="duplicateThreshold" class="form-label">Порог дубликатов ({{ settings.duplicate_threshold }})</label>
                         <input type="range" class="form-range" id="duplicateThreshold" name="duplicate_threshold" 
                                min="0.5" max="1.0" step="0.05" value="{{ settings.duplicate_threshold }}">
                         <div class="form-text">Минимальное качество для считать изображения дубликатами</div>
                     </div>
-
                     <div class="mb-3">
-                        <label for="similarityThreshold" class="form-label">Порог схожести ({{ settings.similarity_threshold }})</label>
-                        <input type="range" class="form-range" id="similarityThreshold" name="similarity_threshold" 
-                               min="0.5" max="1.0" step="0.05" value="{{ settings.similarity_threshold }}">
-                        <div class="form-text">Минимальное сходство для начальной фильтрации</div>
+                        <label for="matchThreshold" class="form-label">Порог сопоставления ({{ settings.match_threshold }})</label>
+                        <input type="range" class="form-range" id="matchThreshold" name="match_threshold"
+                               min="0.5" max="1.0" step="0.1" value="{{ settings.match_threshold }}">
+                        <div class="form-text">Минимальное отношение расстояний для валидации соответствий</div>
                     </div>
+
                 </div>
             </div>
         </div>
@@ -156,29 +84,39 @@
                     <h5 class="mb-0">Кластеризация по выпускам</h5>
                 </div>
                 <div class="card-body">
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="clusterfeatureDetector" class="form-label">Детектор признаков</label>
+                            <select class="form-select" id="clusterfeatureDetector" name="clusterfeatureDetector">
+                                <option value="SIFT" {{ 'selected' if settings.clusterfeatureDetector == 'SIFT' }}>SIFT (Scale-Invariant Feature Transform)</option>
+                                <option value="KAZE" {{ 'selected' if settings.clusterfeatureDetector == 'KAZE' }}>KAZE </option>
+                                <option value="ORB" {{ 'selected' if settings.clusterfeatureDetector == 'ORB' }}>ORB (Oriented FAST and Rotated BRIEF)</option>
+                                <option value="AKAZE" {{ 'selected' if settings.clusterfeatureDetector == 'AKAZE' }}>AKAZE (Accelerated-KAZE)</option>
+                            </select>
+                            <div class="form-text">Алгоритм обнаружения ключевых точек на изображении</div>
+                        </div>
+
+                    </div>
                     <div class="mb-3">
-                        <label for="clusteringMethod" class="form-label">Метод кластеризации</label>
-                        <select class="form-select" id="clusteringMethod" name="clustering_method">
-                            <option value="hierarchical" {{ 'selected' if settings.clustering_method == 'hierarchical' }}>Иерархическая</option>
-                            <option value="kmeans" {{ 'selected' if settings.clustering_method == 'kmeans' }}>K-Means</option>
-                            <option value="dbscan" {{ 'selected' if settings.clustering_method == 'dbscan' }}>DBSCAN</option>
-                            <option value="agglomerative" {{ 'selected' if settings.clustering_method == 'agglomerative' }}>Агломеративная</option>
+                        <label for="clustermatcher" class="form-label">Алгоритм сопоставления</label>
+                        <select class="form-select" id="clustermatcher" name="clustermatcher">
+                            <option value="FLANN" {{ 'selected' if settings.clustermatcher == 'FLANN' }}>FLANN (Fast Library for Approximate Nearest Neighbors)</option>
+                            <option value="BF" {{ 'selected' if settings.clustermatcher == 'BF' }}>Brute Force (поиск по всем парам)</option>
                         </select>
-                        <div class="form-text">Алгоритм группировки изображений по выпускам</div>
+                        <div class="form-text">Метод поиска соответствий между дескрипторами</div>
                     </div>
 
                     <div class="mb-3">
                         <label for="clusterThreshold" class="form-label">Порог кластеризации ({{ settings.cluster_threshold }})</label>
                         <input type="range" class="form-range" id="clusterThreshold" name="cluster_threshold" 
                                min="0.1" max="1.0" step="0.05" value="{{ settings.cluster_threshold }}">
-                        <div class="form-text">Максимальное расстояние между изображениями в одном выпуске</div>
+                        <div class="form-text">Порог определения титульной страницы (схожесть с логотипом)</div>
                     </div>
-
                     <div class="mb-3">
-                        <label for="minClusterSize" class="form-label">Минимальный размер выпуска ({{ settings.min_cluster_size }})</label>
-                        <input type="range" class="form-range" id="minClusterSize" name="min_cluster_size" 
-                               min="1" max="10" step="1" value="{{ settings.min_cluster_size }}">
-                        <div class="form-text">Минимальное количество изображений в выпуске</div>
+                        <label for="clustermatchThreshold" class="form-label">Порог сопоставления ({{ settings.clustermatchThreshold }})</label>
+                        <input type="range" class="form-range" id="clustermatchThreshold" name="clustermatchThreshold"
+                               min="0.5" max="1.0" step="0.1" value="{{ settings.clustermatchThreshold }}">
+                        <div class="form-text">Минимальное отношение расстояний для валидации соответствий</div>
                     </div>
                 </div>
             </div>
@@ -189,22 +127,12 @@
     <div class="card">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="autoApply" name="auto_apply" {{ 'checked' if settings.auto_apply }}>
-                        <label class="form-check-label" for="autoApply">Автоматически применять настройки</label>
-                    </div>
-                </div>
                 <div class="btn-group" role="group">
-                    <button type="button" class="btn btn-outline-secondary" onclick="testSettings()">
-                        <i class="bi bi-play"></i> Протестировать
-                    </button>
+
                     <button type="button" class="btn btn-primary" onclick="saveSettings()">
                         <i class="bi bi-save"></i> Сохранить
                     </button>
-                    <button type="button" class="btn btn-success" onclick="startProcessing()">
-                        <i class="bi bi-play-circle"></i> Начать обработку
-                    </button>
+
                 </div>
             </div>
         </div>
@@ -219,13 +147,10 @@ const taskId = {{ task.id }};
 // Обновление меток слайдеров
 function updateSliderLabels() {
     const sliders = [
-        { id: 'featureThreshold', suffix: '' },
         { id: 'matchThreshold', suffix: '' },
-        { id: 'minMatches', suffix: '' },
         { id: 'duplicateThreshold', suffix: '' },
-        { id: 'similarityThreshold', suffix: '' },
-        { id: 'clusterThreshold', suffix: '' },
-        { id: 'minClusterSize', suffix: '' }
+        { id: 'clustermatchThreshold', suffix: '' },
+        { id: 'clusterThreshold', suffix: '' }
     ];
     
     sliders.forEach(slider => {
@@ -233,7 +158,7 @@ function updateSliderLabels() {
         const label = document.querySelector(`label[for="${slider.id}"]`);
         if (element && label) {
             element.addEventListener('input', function() {
-                label.textContent = `Порог ${label.textContent.split(' (')[0]} (${this.value}${slider.suffix})`;
+                label.textContent = `${label.textContent.split(' (')[0]} (${this.value}${slider.suffix})`;
             });
         }
     });
@@ -242,33 +167,7 @@ function updateSliderLabels() {
 // Сброс настроек к значениям по умолчанию
 function resetToDefaults() {
     if (confirm('Сбросить все настройки к значениям по умолчанию?')) {
-        window.location.href = `/processing/settings/${taskId}?reset=true`;
-    }
-}
-
-// Тестирование настроек
-async function testSettings() {
-    const formData = new FormData(document.getElementById('processingSettingsForm'));
-    const settings = Object.fromEntries(formData);
-    
-    try {
-        const response = await fetch(`/processing/settings/${taskId}/test`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(settings)
-        });
-
-        if (response.ok) {
-            const result = await response.json();
-            alert(`Тестирование успешно! Найдено ${result.matches} соответствий.`);
-        } else {
-            const data = await response.json();
-            alert('Ошибка тестирования: ' + data.detail);
-        }
-    } catch (error) {
-        alert('Ошибка сети: ' + error.message);
+        window.location.href = `/tasks/settings/${taskId}?reset=true`;
     }
 }
 
@@ -278,7 +177,7 @@ async function saveSettings() {
     const settings = Object.fromEntries(formData);
     
     try {
-        const response = await fetch(`/processing/settings/${taskId}`, {
+        const response = await fetch(`/tasks/settings/${taskId}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -287,7 +186,7 @@ async function saveSettings() {
         });
 
         if (response.ok) {
-            alert('Настройки сохранены!');
+            window.location.href = `/tasks/${taskId}`;
         } else {
             const data = await response.json();
             alert('Ошибка сохранения: ' + data.detail);
@@ -297,33 +196,6 @@ async function saveSettings() {
     }
 }
 
-// Начало обработки
-async function startProcessing() {
-    if (!confirm('Начать обработку с текущими настройками?')) return;
-    
-    const formData = new FormData(document.getElementById('processingSettingsForm'));
-    const settings = Object.fromEntries(formData);
-    
-    try {
-        const response = await fetch(`/processing/settings/${taskId}/start`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(settings)
-        });
-
-        if (response.ok) {
-            alert('Обработка начата!');
-            window.location.href = `/processing/stage1/${taskId}`;
-        } else {
-            const data = await response.json();
-            alert('Ошибка запуска: ' + data.detail);
-        }
-    } catch (error) {
-        alert('Ошибка сети: ' + error.message);
-    }
-}
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {

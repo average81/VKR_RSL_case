@@ -151,7 +151,6 @@ def process_images_task(
                     local_duplicates = [img[0] for img in group_images]
                     duplicate_series_name = last_row['duplicate_group'].split('.')[0]
 
-        print(local_duplicates,duplicate_series_name)
         # Обновление задачи
         task = db.query(models.Task).filter(models.Task.id == task_id).first()
         if task:
@@ -160,15 +159,9 @@ def process_images_task(
             db.commit()
 
         # Основной цикл обработки
-
-
-
-
-        print(len(input_images))
         for i in input_images.index:
             img_name = input_images.loc[i, 'filename']
             img_path = os.path.join(input_dir, img_name)
-            print(img_path)
             # Чтение изображения
             try:
                 with open(img_path, 'rb') as f:
@@ -178,7 +171,6 @@ def process_images_task(
 
                 if img is None:
                     continue
-                print(i)
             except Exception as e:
                 continue
 
