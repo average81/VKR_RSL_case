@@ -191,7 +191,8 @@ async def get_task(request: Request, response: Response, task_id: int, current_u
                 'progress': processed_count
             })
 
-
+    while len(progress_history)>100 :
+        progress_history = progress_history[::2]
     # Получаем владельца задачи
     owner = db.query(User).filter(User.id == task.owner_id).first()
 

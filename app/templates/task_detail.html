@@ -23,7 +23,7 @@
         </button>
         {% endif %}
         
-        {% if task.status == 'completed' and not task.validated_at and current_user.is_superuser %}
+        {% if task.status == 'completed' and not task.validated_at and current_user.is_group_leader %}
         <button class="btn btn-success" onclick="validateTask({{ task.id }})">
             <i class="bi bi-check2"></i> Подтвердить выполнение
         </button>

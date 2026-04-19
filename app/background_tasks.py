@@ -337,11 +337,11 @@ def process_images_task(
 
         logger.info(f"End processing")
         # Завершение задачи
-        if task:
+        """if task:
             task.status = "completed"
             task.completed_at = datetime.now()
             task.updated_at = datetime.now()
-            db.commit()
+            db.commit()"""
     finally:
         db.close()  # Важно закрыть!
 

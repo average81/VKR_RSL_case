@@ -145,10 +145,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (data.progress_percent < 100) {
                         setTimeout(refreshProgress, 2000);
                     } else {
-                        // При достижении 100% обновляем страницу
-                        setTimeout(() => {
-                            //location.reload();
-                        }, 1000);
+                        // При достижении 100% проверяем статус задачи перед обновлением страницы
+                        if (!window.taskData || window.taskData.taskStatus !== 'completed') {
+                            setTimeout(() => {
+                                //location.reload();
+                            }, 1000);
+                        }
                     }
                 }
             } catch (error) {
