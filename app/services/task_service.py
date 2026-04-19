@@ -54,12 +54,11 @@ class TaskService:
         if hasattr(created_by, 'role') and created_by.is_group_leader:
             raise PermissionDeniedException("Only admins and group leaders can create tasks")
         
-        # Create task
+        # Create task without output_path initially
         task = Task(
             title=task_data.title,
             description=task_data.description,
             input_path=task_data.input_path,
-            output_path=task_data.output_path,
             stage=task_data.stage,
             owner_id=task_data.owner_id,
             status="pending",
@@ -77,7 +76,23 @@ class TaskService:
                 # If there's an error counting images, set to 0
                 task.total_images = 0
         
-        return self.task_repo.create_task(task)
+        # Create the task first to get an ID
+        created_task = self.task_repo.create_task(task)
+        
+        # Generate output paths based on task ID and stage
+        task_id_str = str(created_task.id)
+        base_output_path = "output"  # You might want to make this configurable
+        
+        if created_task.stage == 1:
+            created_task.output_path = f"{base_output_path}/{task_id_str}/stage1"
+        else:
+            created_task.output_path = f"{base_output_path}/{task_id_str}/stage2"
+            
+        # For stage 2, also set output_path_stage2
+        created_task.output_path_stage2 = f"{base_output_path}/{task_id_str}/stage2"
+        
+        # Update the task with output paths
+        return self.task_repo.update_task(created_task)
 
     def assign_task(self, task_id: int, assigned_to_id: int, assigned_by: User) -> Task:
         """

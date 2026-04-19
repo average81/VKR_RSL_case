@@ -3,6 +3,12 @@
 {% block title %}Обработка - Этап 1: Поиск дубликатов - {{ task.title }}{% endblock %}
 
 {% block content %}
+<!-- Главный контейнер с данными для JavaScript -->
+<div id="processing-stage1" 
+     data-task-id="{{ task.id }}" 
+     data-group-id="{{ current_group.id }}"
+     data-group-ids="{{ group_ids|join(',') }}">
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1>Этап 1: Поиск дубликатов</h1>
@@ -10,10 +16,10 @@
     </div>
     <div class="text-end">
         <div class="btn-group" role="group">
-            <button class="btn btn-outline-secondary" onclick="navigateGroup('prev')">
+            <button class="btn btn-outline-secondary" id="prev-group-btn">
                 <i class="bi bi-arrow-left"></i> Предыдущая
             </button>
-            <button class="btn btn-outline-secondary" onclick="navigateGroup('next')">
+            <button class="btn btn-outline-secondary" id="next-group-btn">
                 Следующая <i class="bi bi-arrow-right"></i>
             </button>
         </div>
@@ -60,7 +66,7 @@
             <div class="col-6 col-md-4 col-lg-3">
                 <div class="card h-100">
                     <div class="position-relative">
-                        <img src="{{ image.path }}" class="card-img-top" alt="Изображение" style="height: 200px; object-fit: contain; background: #f8f9fa;">
+                        <img src="/{{ image.processed_path }}/{{ image.filename }}" class="card-img-top" alt="Изображение" style="height: 400px; object-fit: contain; background: #f8f9fa;">
                         <div class="position-absolute top-0 end-0 p-2">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" id="image_{{ image.id }}" 
@@ -76,26 +82,6 @@
             </div>
             {% endfor %}
         </div>
-
-        <!-- Метрики схожести -->
-        <div class="row mt-4">
-            <div class="col-md-6">
-                <h6>Метрики схожести:</h6>
-                <ul class="list-unstyled small">
-                    <li><i class="bi bi-bar-chart"></i> Среднее сходство: {{ current_group.similarity_avg|round(3) }}</li>
-                    <li><i class="bi bi-speedometer"></i> Максимальное сходство: {{ current_group.similarity_max|round(3) }}</li>
-                    <li><i class="bi bi-clock"></i> Минимальное сходство: {{ current_group.similarity_min|round(3) }}</li>
-                </ul>
-            </div>
-            <div class="col-md-6">
-                <h6>Информация об изображениях:</h6>
-                <ul class="list-unstyled small">
-                    <li><i class="bi bi-file-earmark"></i> Разрешение: {{ current_group.resolution }}</li>
-                    <li><i class="bi bi-palette"></i> Цветовая модель: {{ current_group.color_mode }}</li>
-                    <li><i class="bi bi-calendar"></i> Дата создания: {{ current_group.created_date }}</li>
-                </ul>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -105,116 +91,24 @@
         <div class="d-flex justify-content-between align-items-center">
             <div>
                 <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="confirm_all">
-                    <label class="form-check-label" for="confirm_all">
+                    <input class="form-check-input" type="checkbox" id="confirm-all">
+                    <label class="form-check-label" for="confirm-all">
                         Подтвердить все изображения в группе
                     </label>
                 </div>
             </div>
             <div class="btn-group" role="group">
-                <button class="btn btn-outline-secondary" onclick="cancelProcessing()">Отмена</button>
-                <button class="btn btn-primary" onclick="saveGroup()">Сохранить и следующая</button>
-                <button class="btn btn-success" onclick="completeProcessing()">Завершить этап</button>
+                <button class="btn btn-outline-secondary" id="cancel-btn">Отмена</button>
+                <button class="btn btn-primary" id="save-and-next-btn">Сохранить и следующая</button>
+                <button class="btn btn-success" id="complete-stage-btn">Завершить</button>
             </div>
         </div>
     </div>
 </div>
+
+</div><!-- Закрытие контейнера processing-stage1 -->
 {% endblock %}
 
 {% block scripts %}
-<script>
-const taskId = {{ task.id }};
-const groupId = {{ current_group.id }};
-
-// Навигация между группами
-function navigateGroup(direction) {
-    window.location.href = `/processing/stage1/${taskId}?group_id=${direction}`;
-}
-
-// Отмена обработки
-function cancelProcessing() {
-    if (confirm('Отменить обработку? Все изменения будут потеряны.')) {
-        window.location.href = `/tasks/${taskId}`;
-    }
-}
-
-// Сохранение текущей группы
-async function saveGroup() {
-    const selectedImages = [];
-    document.querySelectorAll('input[type="checkbox"][data-image-id]:checked').forEach(checkbox => {
-        selectedImages.push(parseInt(checkbox.dataset.imageId));
-    });
-
-    try {
-        const response = await fetch(`/processing/stage1/${taskId}/group/${groupId}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                image_ids: selectedImages,
-                action: 'save'
-            })
-        });
-
-        if (response.ok) {
-            navigateGroup('next');
-        } else {
-            const data = await response.json();
-            alert('Ошибка: ' + data.detail);
-        }
-    } catch (error) {
-        alert('Ошибка сети: ' + error.message);
-    }
-}
-
-// Завершение этапа
-async function completeProcessing() {
-    if (!confirm('Завершить первый этап обработки?')) return;
-
-    const selectedImages = [];
-    document.querySelectorAll('input[type="checkbox"][data-image-id]:checked').forEach(checkbox => {
-        selectedImages.push(parseInt(checkbox.dataset.imageId));
-    });
-
-    try {
-        const response = await fetch(`/processing/stage1/${taskId}/complete`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                image_ids: selectedImages
-            })
-        });
-
-        if (response.ok) {
-            alert('Первый этап обработки завершен!');
-            window.location.href = `/processing/stage2/${taskId}`;
-        } else {
-            const data = await response.json();
-            alert('Ошибка: ' + data.detail);
-        }
-    } catch (error) {
-        alert('Ошибка сети: ' + error.message);
-    }
-}
-
-// Обработка чекбокса "Подтвердить все"
-document.getElementById('confirm_all').addEventListener('change', function() {
-    const checkboxes = document.querySelectorAll('input[type="checkbox"][data-image-id]');
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = this.checked;
-    });
-});
-
-// Синхронизация состояния чекбоксов
-document.querySelectorAll('input[type="checkbox"][data-image-id]').forEach(checkbox => {
-    checkbox.addEventListener('change', function() {
-        const allChecked = Array.from(document.querySelectorAll('input[type="checkbox"][data-image-id]'))
-            .every(cb => cb.checked);
-        document.getElementById('confirm_all').checked = allChecked;
-    });
-});
-</script>
+<script src="/static/js/processing_stage1.js"></script>
 {% endblock %}

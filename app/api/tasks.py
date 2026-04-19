@@ -240,7 +240,6 @@ async def create_task_form(
     title: str = Form(...),
     description: str = Form(...),
     input_path: str = Form(...),
-    output_path: str = Form(...),
     stage: str = Form(...),
     owner_id: int = Form(...),
     current_user = Depends(get_current_user),
@@ -250,15 +249,14 @@ async def create_task_form(
     """
     Создание новой задачи через форму.
     Принимает поля формы и перенаправляет на /tasks после успешного создания.
+    Output path генерируется автоматически в формате output/task_id/stage1 или output/task_id/stage2
     """
     task_create = TaskCreate(
         title=title,
         description=description,
         input_path=input_path,
-        output_path=output_path,
         stage=int(stage),
         owner_id=owner_id,
-        output_path_stage2=output_path,
     )
 
     assigned_user = db.query(User).filter(User.id == task_create.owner_id).first()

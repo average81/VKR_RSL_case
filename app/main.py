@@ -32,6 +32,7 @@ app.add_middleware(
 
 # Монтируем статические файлы
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/output", StaticFiles(directory="output"), name="output")
 
 # Настраиваем шаблоны Jinja2
 templates = Jinja2Templates(directory="app/templates")
@@ -39,13 +40,14 @@ templates = Jinja2Templates(directory="app/templates")
 templates.env.globals["get_flashed_messages"] = get_flashed_messages
 
 # Подключаем API роутеры
-from app.api import auth, tasks, images, grouping, admin
+from app.api import auth, tasks, images, grouping, admin, processing
 
 app.include_router(auth.router, tags=["auth"])
 app.include_router(tasks.router, tags=["tasks"])
 app.include_router(admin.router, tags=["admin"])
 app.include_router(images.router, tags=["images"])
-#app.include_router(grouping.router, prefix="/grouping", tags=["grouping"])
+app.include_router(grouping.router, prefix="/grouping", tags=["grouping"])
+app.include_router(processing.router, tags=["processing"])
 
 
 @app.get("/")

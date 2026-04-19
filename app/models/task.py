@@ -49,7 +49,7 @@ class TaskBase(BaseModel):
     title: str
     description: Optional[str] = None
     input_path: str
-    output_path: str
+    output_path: Optional[str] = None
     output_path_stage2: Optional[str] = None
     status: str = 'pending'
     stage: int = 1
