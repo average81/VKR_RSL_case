@@ -50,7 +50,7 @@ class TaskService:
         Raises:
             PermissionDeniedException: If creator doesn't have sufficient privileges
         """
-        # Validate permissions - only admins and group leaders can create tasks
+        # Validate permissions - only group leaders can create tasks
         if hasattr(created_by, 'role') and created_by.is_group_leader:
             raise PermissionDeniedException("Only admins and group leaders can create tasks")
         
@@ -94,43 +94,6 @@ class TaskService:
         # Update the task with output paths
         return self.task_repo.update_task(created_task)
 
-    def assign_task(self, task_id: int, assigned_to_id: int, assigned_by: User) -> Task:
-        """
-        Assign a task to a user.
-        
-        Args:
-            task_id (int): ID of the task to assign
-            assigned_to_id (int): ID of the user to assign the task to
-            assigned_by (User): User assigning the task
-            
-        Returns:
-            Task: Updated task object
-            
-        Raises:
-            TaskNotFoundException: If task doesn't exist
-            PermissionDeniedException: If assigner doesn't have sufficient privileges
-        """
-        task = self.task_repo.get_task_by_id(task_id)
-        if not task:
-            raise TaskNotFoundException(f"Task with id {task_id} not found")
-        
-        # Check permissions
-        if (hasattr(assigned_by, 'role') and assigned_by.role not in [Role.ADMIN, Role.GROUP_LEADER]) or \
-           (not hasattr(assigned_by, 'role') and not assigned_by.is_superuser):
-            # Regular users can only assign tasks they own
-            if task.created_by != assigned_by.id:
-                raise PermissionDeniedException("Insufficient permissions to assign this task")
-        
-        # Verify assigned user exists
-        assigned_to = self.user_repo.get_user_by_id(assigned_to_id)
-        if not assigned_to:
-            raise ValidationException(f"User with id {assigned_to_id} not found")
-        
-        task.assigned_to = assigned_to_id
-        task.status = TaskStatus.ASSIGNED
-        task.assigned_at = datetime.utcnow()
-        
-        return self.task_repo.update_task(task)
 
     def update_task_status(self, task_id: int, new_status: TaskStatus, updated_by: User) -> Task:
         """
@@ -253,13 +216,12 @@ class TaskService:
             return current_status != TaskStatus.COMPLETED
             
         valid_transitions = {
-            TaskStatus.PENDING: [TaskStatus.ASSIGNED, TaskStatus.CANCELLED],
-            TaskStatus.ASSIGNED: [TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED],
-            TaskStatus.IN_PROGRESS: [TaskStatus.COMPLETED, TaskStatus.ON_HOLD, TaskStatus.CANCELLED, TaskStatus.PAUSED],
-            TaskStatus.ON_HOLD: [TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED],
-            TaskStatus.COMPLETED: [],
-            TaskStatus.CANCELLED: [],
-            TaskStatus.PAUSED: [TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED]
+            TaskStatus.PENDING: [],
+            TaskStatus.IN_PROGRESS: [TaskStatus.PAUSED],
+            TaskStatus.ON_USER_REVIEW:[TaskStatus.IN_PROGRESS,TaskStatus.PAUSED],
+            TaskStatus.ON_VALIDATION:[TaskStatus.ON_USER_REVIEW],
+            TaskStatus.COMPLETED: [TaskStatus.ON_VALIDATION],
+            TaskStatus.PAUSED: [TaskStatus.IN_PROGRESS]
         }
         
         return new_status in valid_transitions.get(current_status, [])
@@ -403,8 +365,6 @@ class TaskService:
         for task in all_tasks:
             if task.status == TaskStatus.PENDING:
                 metrics["pending_tasks"] += 1
-            elif task.status == TaskStatus.ASSIGNED:
-                metrics["assigned_tasks"] += 1
             elif task.status == TaskStatus.IN_PROGRESS:
                 metrics["in_progress_tasks"] += 1
             elif task.status == TaskStatus.COMPLETED:
@@ -412,9 +372,9 @@ class TaskService:
                 completed_count += 1
                 if task.started_at and task.completed_at:
                     total_completion_time += task.completed_at - task.started_at
-            elif task.status == TaskStatus.ON_HOLD:
+            elif task.status == TaskStatus.PAUSED:
                 metrics["on_hold_tasks"] += 1
-            elif task.status == TaskStatus.CANCELLED:
+            elif task.status == TaskStatus.STOPPED:
                 metrics["cancelled_tasks"] += 1
             
             # Count tasks by type

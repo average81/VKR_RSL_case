@@ -20,7 +20,7 @@ class Image(Base):
     issue_name = Column(String)  # название выпуска
     issue_number = Column(Integer)  # порядковый номер выпуска
     quality_score = Column(Integer)  # оценка качества изображения
-    validation_status = Column(String, default="pending")  # pending, validated, rejected
+    validation_status = Column(String, default="pending")  # pending, user_validated, leader_validated
     validated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

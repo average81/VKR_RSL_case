@@ -47,7 +47,7 @@ def validate_processing_access(task: Task, current_user: User) -> bool:
     return task.owner_id == current_user.id
 
 
-def get_task_with_validation(
+def get_task_with_review(
     task_id: int,
     db: Session,
     current_user: User
@@ -82,10 +82,10 @@ def get_task_with_validation(
         )
     
     # Проверка статуса задачи
-    if task.status not in ["in_progress", "completed"]:
+    if task.status in ["completed"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Задача должна быть в статусе 'in_progress' или 'completed'"
+            detail="Задача не должна быть в статусе или 'completed'"
         )
     
     # Проверка этапа
@@ -151,10 +151,10 @@ async def get_processing_stage1(
         current_user: Текущий пользователь
     
     Returns:
-        Шаблон страницы processing_stage1.html с данными для обработки
+        Шаблон страницы processing_duplicates_stage1.html с данными для обработки
     """
     # Получаем задачу с проверкой доступа и валидацией
-    task = get_task_with_validation(task_id, db, current_user)
+    task = get_task_with_review(task_id, db, current_user)
     
     # Получаем все группы дубликатов
     duplicate_groups = get_duplicate_groups_for_task(task_id, db)
@@ -193,7 +193,7 @@ async def get_processing_stage1(
     
     return templates.TemplateResponse(
         request=request,
-        name="processing_stage1.html",
+        name="processing_duplicates_stage1.html",
         context=template_data
     )
 
@@ -226,7 +226,7 @@ async def save_group_selection(
     """
 
     # Получаем задачу с проверкой доступа и валидацией
-    task = get_task_with_validation(task_id, db, current_user)
+    task = get_task_with_review(task_id, db, current_user)
     
     # Получаем все изображения группы
     group_images = db.query(Image).filter(
@@ -271,9 +271,11 @@ async def save_group_selection(
                 detail=f"Изображение с ID {img.id} не принадлежит к группе {group_id}"
             )
     
-    # Обновляем флаг is_duplicate для изображений, которые должны быть удалены из группы
+    # Обновляем флаг is_duplicate и validation_status для изображений группы
     for img in group_images:
         img.is_duplicate = img.id in request.image_ids
+        img.validation_status = "user_validated"
+        img.validated_by = current_user.id
     
     db.commit()
     
@@ -301,14 +303,18 @@ async def complete_stage1(
         Сообщение об успешном завершении этапа
     """
     # Получаем задачу с проверкой доступа и валидацией
-    task = get_task_with_validation(task_id, db, current_user)
+    task = get_task_with_review(task_id, db, current_user)
     
-    # Проверяем, что задача находится на последнем шаге
-    duplicate_groups = get_duplicate_groups_for_task(task_id, db)
-    group_ids = list(duplicate_groups.keys())
+    # Получаем все изображения задачи
+    images = db.query(Image).filter(Image.task_id == task_id).all()
     
-    # В реальной системе здесь должна быть проверка, что пользователь прошел все группы
-    # Для упрощения пропускаем эту проверку
+    # Проверяем, что все изображения имеют validation_status == user_validated
+    for img in images:
+        if img.validation_status != "user_validated":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Не все изображения прошли валидацию. Завершите проверку всех групп дубликатов."
+            )
     
     # Обновляем статус задачи
     task_service = TaskService(db)

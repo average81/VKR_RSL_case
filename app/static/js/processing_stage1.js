@@ -37,10 +37,7 @@ const ProcessingStage1 = {
         
         // Обработчик для кнопки завершения этапа
         document.getElementById('complete-stage-btn')?.addEventListener('click', () => this.completeStage());
-        
-        // Обработчик для кнопки отмены
-        document.getElementById('cancel-btn')?.addEventListener('click', () => this.cancelProcessing());
-        
+
         // Обработчик для чекбокса "Подтвердить все"
         document.getElementById('confirm-all')?.addEventListener('change', (e) => this.toggleAllImages(e.target.checked));
         
@@ -124,18 +121,7 @@ const ProcessingStage1 = {
      * Завершение первого этапа обработки
      */
     completeStage: function() {
-        if (confirm('Завершить обработку? Все изображения будут подтверждены.')) {
-            window.location.href = `/tasks/${this.taskId}`;
-        }
-    },
-
-    /**
-     * Отмена обработки
-     */
-    cancelProcessing: function() {
-        if (confirm('Отменить обработку? Все изменения будут потеряны.')) {
-            window.location.href = `/tasks/${this.taskId}`;
-        }
+        window.location.href = `/tasks/${this.taskId}`;
     },
     
     /**

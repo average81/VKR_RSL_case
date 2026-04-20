@@ -116,8 +116,8 @@
                 <div class="mb-3">
                     <label class="form-label"><i class="bi bi-check2-circle"></i> Статус</label>
                     <div>
-                        <span class="badge bg-{{ 'success' if task.status == 'validated' else 'primary' if task.status == 'completed' else 'warning' if task.status in ['in_progress', 'paused'] else 'danger' if task.status == 'stopped' else 'secondary' }}">
-                            {{ {'pending': 'Ожидание', 'in_progress': 'В процессе', 'paused': 'Приостановлена', 'completed': 'Завершено', 'validated': 'Подтверждено', 'stopped': 'Прекращена'}[task.status] }}
+                        <span class="badge bg-{{ 'success' if task.status == 'validated' else 'primary' if task.status == 'completed' else 'warning' if task.status in ['in_progress', 'paused'] else 'danger' if task.status == 'stopped' else 'info' if task.status == 'on_user_review' else 'primary' if task.status == 'validation_in_process' else 'secondary' }}">
+                            {{ {'pending': 'Ожидание', 'in_progress': 'В процессе', 'paused': 'Приостановлена', 'completed': 'Завершено', 'validated': 'Подтверждено', 'stopped': 'Прекращена', 'on_user_review': 'На проверке у пользователя', 'validation_in_process': 'На валидации'}[task.status] }}
                         </span>
                         {% if task.validated_at %}
                         <small class="text-muted ms-2">{{ task.validated_at.strftime('%d.%m.%Y %H:%M') }}</small>
@@ -226,7 +226,7 @@
             <button class="btn btn-sm btn-outline-secondary" onclick="refreshResults()">
                 <i class="bi bi-arrow-clockwise"></i> Обновить
             </button>
-            {% if task.stage == 1 and task.progress == task.total_images%}
+            {% if task.stage == 1 and task.status == "on_user_review"%}
             <a href="/processing/stage1/{{ task.id }}" class="btn btn-sm btn-primary">
                 <i class="bi bi-search"></i> Просмотреть дубликаты
             </a>
