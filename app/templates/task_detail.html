@@ -230,6 +230,10 @@
             <a href="/processing/stage1/{{ task.id }}" class="btn btn-sm btn-primary">
                 <i class="bi bi-search"></i> Просмотреть дубликаты
             </a>
+            <span class="mx-2"></span>
+            <a href="/processing/unduplicates/stage1/{{ task.id }}" class="btn btn-sm btn-primary">
+                <i class="bi bi-image"></i> Просмотреть уникальные изображения
+            </a>
             {% elif task.stage == 2 %}
             <button class="btn btn-sm btn-primary" onclick="viewIssues()">
                 <i class="bi bi-diagram-3"></i> Просмотреть выпуски
@@ -308,7 +312,8 @@
     // Передаем данные из шаблона в JavaScript
     window.taskData = {
         taskId: {{ task.id }},
-        progressHistory: {{ progress_history|tojson }}
+        progressHistory: {{ progress_history|tojson }},
+        status: "{{ task.status}}",
     };
 
 </script>

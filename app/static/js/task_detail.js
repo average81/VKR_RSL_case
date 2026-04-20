@@ -146,9 +146,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         setTimeout(refreshProgress, 2000);
                     } else {
                         // При достижении 100% проверяем статус задачи перед обновлением страницы
-                        if (!window.taskData || window.taskData.taskStatus !== 'completed') {
+                        if (!window.taskData || window.taskData.status !== 'on_user_review') {
                             setTimeout(() => {
-                                //location.reload();
+                                location.reload();
                             }, 1000);
                         }
                     }

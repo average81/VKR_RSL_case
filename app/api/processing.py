@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 # Импортируем templates из основного модуля приложения
 from app.main import templates
+from fastapi import Query
 
 from app.database import get_db
 from app.api.auth import get_current_active_user
@@ -201,6 +202,99 @@ async def get_processing_stage1(
 class SaveGroupRequest(BaseModel):
     image_ids: List[int] = []
     action: str = "save"
+
+class SaveImageRequest(BaseModel):
+    confirmed: bool = True
+    action: str = "save"
+
+
+def get_unduplicated_images_for_task(task_id: int, db: Session) -> List[Image]:
+    """
+    Получает список изображений, не находящихся в папке duplicates.
+    
+    Args:
+        task_id: ID задачи
+        db: Сессия базы данных
+    
+    Returns:
+        Список изображений, не находящихся в папке duplicates
+    """
+    # Получаем все изображения задачи
+    all_images = db.query(Image).filter(Image.task_id == task_id).all()
+    
+    # Фильтруем изображения, путь которых не содержит 'duplicates'
+    unduplicated_images = [
+        img for img in all_images 
+        if 'duplicates' not in img.processed_path
+    ]
+    
+    # Сортируем по ID для последовательной навигации
+    return sorted(unduplicated_images, key=lambda x: x.id)
+
+@router.get("/unduplicates/stage1/{task_id}")
+async def get_processing_unduplicates_stage1(
+    request: Request,
+    task_id: int,
+    image_id: int = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Возвращает страницу для ручной проверки изображений, не входящих в группы дубликатов.
+    
+    Args:
+        request: Объект запроса
+        task_id: ID задачи
+        image_id: ID конкретного изображения для отображения
+        db: Сессия базы данных
+        current_user: Текущий пользователь
+    
+    Returns:
+        Шаблон страницы processing_unduplicates_stage1.html с данными для обработки
+    """
+    # Получаем задачу с проверкой доступа и валидацией
+    task = get_task_with_review(task_id, db, current_user)
+    
+    # Получаем все изображения, не входящие в группы дубликатов
+    unduplicated_images = get_unduplicated_images_for_task(task_id, db)
+    
+    if not unduplicated_images:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Изображения, не входящие в группы дубликатов, не найдены для задачи"
+        )
+    
+    # Определяем текущее изображение
+    image_ids = [img.id for img in unduplicated_images]
+    current_image_idx = 0
+    
+    # Обработка параметра image_id
+    if image_id in image_ids:
+        current_image_idx = image_ids.index(image_id)
+    
+    current_image = unduplicated_images[current_image_idx]
+    
+    # Формируем данные для шаблона
+    template_data = {
+        "task": task,
+        "current_user": current_user,
+        "current_image": {
+            "id": current_image.id,
+            "filename": current_image.filename,
+            "processed_path": current_image.processed_path,
+        },
+        "image_ids": image_ids,
+        "progress": {
+            "current": current_image_idx + 1,
+            "total": len(image_ids)
+        }
+    }
+    
+    return templates.TemplateResponse(
+        request=request,
+        name="processing_unduplicates_stage1.html",
+        context=template_data
+    )
 
 @router.post("/stage1/{task_id}/group/{group_id}")
 async def save_group_selection(

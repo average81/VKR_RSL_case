@@ -268,27 +268,6 @@ async def create_task_form(
     return RedirectResponse(url="/tasks", status_code=status.HTTP_303_SEE_OTHER)
 
 
-@router.put("/{task_id}", response_model=TaskSchema)
-async def update_task(
-    request: Request,
-    task_id: int,
-    task_update: TaskCreate,
-    current_user = Depends(get_current_user),
-    db = Depends(get_db),
-    _ = Depends(check_group_leader)
-):
-    """
-    Обновление задачи.
-    Доступно только начальнику группы.
-    """
-    task_service = TaskService(db)
-    task = task_service.get_task_by_id(task_id, current_user)
-    if not task:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-
-    return task_service.update_task(task_id, task_update)
-
-
 @router.delete("/{task_id}")
 async def delete_task(
     request: Request,
@@ -309,27 +288,6 @@ async def delete_task(
     task_service.delete_task(task_id)
     return {"message": "Task deleted successfully"}
 
-
-@router.post("/{task_id}/start", response_model=TaskSchema)
-async def start_task_processing(
-    request: Request,
-    task_id: int,
-    current_user = Depends(get_current_user),
-    db = Depends(get_db)
-):
-    """
-    Запуск обработки задачи.
-    Доступно сотруднику (если задача назначена ему) или начальнику группы.
-    """
-    task_service = TaskService(db)
-    task = task_service.get_task_by_id(task_id, current_user)
-    if not task:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-
-    if not check_task_access(request, current_user, task):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-
-    return task_service.start_task(task_id)
 
 
 @router.post("/{task_id}/complete", response_model=TaskSchema)
