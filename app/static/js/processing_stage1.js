@@ -43,7 +43,7 @@ const ProcessingStage1 = {
         
         // Обработчики для чекбоксов изображений
         document.querySelectorAll('input[type="checkbox"][data-image-id]').forEach(checkbox => {
-            checkbox.addEventListener('change', () => this.updateConfirmAllCheckbox());
+            checkbox.addEventListener('change', (e) => this.handleImageCheckboxChange(e.target));
         });
     },
     
@@ -141,6 +141,86 @@ const ProcessingStage1 = {
         const allCheckboxes = document.querySelectorAll('input[type="checkbox"][data-image-id]');
         const allChecked = Array.from(allCheckboxes).every(checkbox => checkbox.checked);
         document.getElementById('confirm-all').checked = allChecked;
+    },
+    
+    /**
+     * Получение массива чекбоксов изображений, упорядоченных по data-order
+     */
+    getImageCheckboxes: function() {
+        const checkboxes = Array.from(document.querySelectorAll('input[type="checkbox"][data-image-id]'));
+        return checkboxes.sort((a, b) => {
+            const orderA = parseInt(a.dataset.order) || 0;
+            const orderB = parseInt(b.dataset.order) || 0;
+            return orderA - orderB;
+        });
+    },
+    
+    /**
+     * Проверка, что выбранные чекбоксы образуют непрерывный блок с краев
+     * @returns {boolean} true если выбор валиден, false если нет
+     */
+    isValidSelection: function() {
+        const checkboxes = this.getImageCheckboxes();
+        if (checkboxes.length === 0) return true;
+        
+        // Находим первый и последний выбранный чекбокс
+        const firstChecked = checkboxes.findIndex(cb => cb.checked);
+        const lastChecked = checkboxes.findLastIndex(cb => cb.checked);
+        
+        // Если ничего не выбрано
+        if (firstChecked === -1) return true;
+        
+        // Проверяем, что все чекбоксы между первым и последним выбранным тоже выбраны
+        for (let i = firstChecked; i <= lastChecked; i++) {
+            if (!checkboxes[i].checked) {
+                return false;
+            }
+        }
+        
+        // Проверяем, что выбранный блок начинается с начала или заканчивается в конце
+        // То есть, все чекбоксы до первого выбранного и после последнего выбранного должны быть не выбраны
+        for (let i = 0; i < firstChecked; i++) {
+            if (checkboxes[i].checked) {
+                return false;
+            }
+        }
+        
+        for (let i = lastChecked + 1; i < checkboxes.length; i++) {
+            if (checkboxes[i].checked) {
+                return false;
+            }
+        }
+        
+        return true;
+    },
+    
+    /**
+     * Обработчик изменения состояния чекбокса изображения
+     * Проверяет валидность выбора и при необходимости отменяет изменение
+     * @param {HTMLInputElement} checkbox - элемент чекбокса
+     */
+    handleImageCheckboxChange: function(checkbox) {
+        // Сохраняем текущее состояние перед изменением
+        const wasChecked = checkbox.checked;
+        
+
+
+
+        // Даем браузеру применить изменение
+        setTimeout(() => {
+            // Проверяем валидность нового состояния
+            if (!this.isValidSelection()) {
+                // Если выбор невалиден, восстанавливаем предыдущее состояние
+                checkbox.checked = !wasChecked;
+                alert('Изменение выбора невозможно: можно выбирать или снимать флажки только с концов последовательности изображений.');
+                this.updateConfirmAllCheckbox();
+            } else {
+                // Применяем изменение
+                checkbox.checked = wasChecked;
+                // Обновляем состояние чекбокса "Подтвердить все"
+                this.updateConfirmAllCheckbox();
+            }
+        }, 0);
     }
 };
 

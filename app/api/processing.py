@@ -276,7 +276,21 @@ async def save_group_selection(
         img.is_duplicate = img.id in request.image_ids
         img.validation_status = "user_validated"
         img.validated_by = current_user.id
+
+    # Проверяем количество выбранных изображений
+    if len(request.image_ids) == 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Группа дубликатов не может содержать только одно изображение"
+        )
     
+    # Определяем изображение с наименьшим ID из оставленных дубликатов
+    if request.image_ids:
+        main_duplicate_id = min(request.image_ids)
+        # Устанавливаем is_main_duplicate только для изображения с наименьшим ID
+        for img in group_images:
+            img.is_main_duplicate = (img.id == main_duplicate_id)
+
     db.commit()
     
     logger.info(f"Пользователь {current_user.username} сохранил выбор для группы {group_id} задачи {task_id}")
