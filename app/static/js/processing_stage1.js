@@ -95,6 +95,7 @@ const ProcessingStage1 = {
         });
 
         try {
+            // Отправляем POST запрос для сохранения текущей группы
             const response = await fetch(`/processing/stage1/${this.taskId}/group/${currentGroupId}`, {
                 method: 'POST',
                 headers: {
@@ -106,12 +107,42 @@ const ProcessingStage1 = {
                 })
             });
 
-            if (response.ok) {
-                this.navigateGroup('next');
-            } else {
+            if (!response.ok) {
                 const data = await response.json();
-                alert('Ошибка: ' + data.detail);
+                alert('Ошибка при сохранении группы: ' + data.detail);
+                return;
             }
+
+            // Определяем следующую группу для обновления статуса изображений вне группы
+            const currentIndex = this.groupIds.indexOf(this.groupId);
+            let nextIndex = Math.min(currentIndex + 1, this.groupIds.length - 1);
+            
+            // Получаем все ID изображений
+            const allImageCheckboxes = document.querySelectorAll('input[type="checkbox"][data-image-id]');
+            const allImageIds = Array.from(allImageCheckboxes).map(cb => parseInt(cb.dataset.imageId));
+            
+            // Формируем список НЕ выбранных изображений
+            const unselectedImages = allImageIds.filter(id => !selectedImages.includes(id));
+            
+            // Отправляем POST запрос для обновления статуса изображений вне группы
+            const ungroupResponse = await fetch(`/processing/stage1/${this.taskId}/ungroup/${currentGroupId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    image_ids: unselectedImages,
+                    action: 'save'
+                })
+            });
+
+            if (!ungroupResponse.ok) {
+                console.warn('Не удалось обновить статус изображений вне группы', await ungroupResponse.json());
+            }
+
+            // Переходим к следующей группе
+            this.navigateGroup('next');
+            
         } catch (error) {
             alert('Ошибка сети: ' + error.message);
         }

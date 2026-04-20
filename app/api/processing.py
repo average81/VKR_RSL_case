@@ -297,6 +297,121 @@ async def save_group_selection(
     
     return {"message": "Выбор успешно сохранен"}
 
+@router.post("/stage1/{task_id}/ungroup/{group_id}")
+async def update_ungrouped_status(
+    task_id: int,
+    group_id: str,
+    request: SaveGroupRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Обновляет статус изображений, исключаемых из указанной группы дубликатов
+    Перемещает их из папки группы дубликатов в папку task_id/stage1
+    
+    Args:
+        task_id: ID задачи
+        group_id: ID группы дубликатов
+        db: Сессия базы данных
+        current_user: Текущий пользователь
+    
+    Returns:
+        Сообщение об успешном обновлении
+    
+    Raises:
+        HTTPException: При ошибках доступа, валидации или при проблемах с перемещением файлов
+    """
+    
+    # Получаем задачу с проверкой доступа и валидацией
+    task = get_task_with_review(task_id, db, current_user)
+
+    # Получаем путь к папке task_id/stage1 (на два уровня выше)
+    # Предполагаем, что путь к группе имеет структуру: base_path/group_name
+    # и нам нужно подняться на два уровня вверх
+    if task.output_path:
+        base_output_path = os.path.dirname(os.path.dirname(task.output_path))
+        target_path = os.path.join(base_output_path, str(task_id), "stage1")
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не задан путь вывода для задачи"
+        )
+    
+    # Создаем целевую папку, если она не существует
+    if not os.path.exists(target_path):
+        os.makedirs(target_path)
+    
+    # Получаем все дубликаты задачи
+    duplicate_images = db.query(Image).filter(
+        Image.task_id == task_id,
+        Image.is_duplicate == True
+    ).all()
+    
+    # Фильтруем изображения, которые принадлежат к указанной группе
+    group_images = [
+        img for img in duplicate_images 
+        if img.duplicate_group == group_id or \
+           (img.duplicate_group is None and img.filename.split('.')[0] == group_id)
+    ]
+    
+    if not group_images:
+        # Группа не найдена или уже обработана
+        return {"message": f"Группа {group_id} не найдена или не содержит дубликатов"}
+
+    # Получаем изображения по ID
+    selected_images = db.query(Image).filter(
+        Image.id.in_(request.image_ids),
+        Image.task_id == task_id
+    ).all()
+
+    # Проверяем, что все переданные ID существуют и относятся к задаче
+    selected_ids = [img.id for img in selected_images]
+    for img_id in request.image_ids:
+        if img_id not in selected_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Изображение с ID {img_id} не найдено или не принадлежит задаче"
+            )
+
+    # Проверяем, что все изображения из группы
+    for img in selected_images:
+        if img.duplicate_group != group_id and img.filename.split('.')[0] != group_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Изображение с ID {img.id} не принадлежит к группе {group_id}"
+            )
+    
+    # Обновляем каждое изображение группы
+    for img in selected_images:
+        # Проверяем, существует ли файл в текущем пути
+        old_file_path = os.path.join(img.processed_path, img.filename)
+        new_file_path = os.path.join(target_path, img.filename)
+        
+        if os.path.exists(old_file_path):
+            # Перемещаем файл
+            try:
+                os.rename(old_file_path, new_file_path)
+            except Exception as e:
+                logger.error(f"Ошибка при перемещении файла {old_file_path}: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Ошибка при перемещении файла {img.filename}: {str(e)}"
+                )
+        
+        # Обновляем запись в базе данных
+        img.is_duplicate = False
+        img.is_main_duplicate = False
+        img.processed_path = target_path
+        img.duplicate_group = None
+        img.validation_status = "updated"
+        img.validated_by = current_user.id
+    
+    db.commit()
+    
+    logger.info(f"Обновлены изображения вне группы {group_id} для задачи {task_id}")
+    
+    return {"message": f"Изображения из группы {group_id} успешно перемещены и обновлены"}
+
 @router.post("/stage1/{task_id}/complete")
 async def complete_stage1(
     task_id: int,
