@@ -64,7 +64,7 @@
         <div class="row">
             <div class="col-md-6">
                 <div class="text-center mb-4">
-                    <h6>Текущее изображение #{{ current_image.id }}</h6>
+                    <h6>Текущее изображение: {{ current_image.filename }}</h6>
                     <img src="/{{ current_image.processed_path }}/{{ current_image.filename }}" 
                          class="img-fluid current-image" 
                          data-image-id="{{ current_image.id }}"
@@ -81,7 +81,7 @@
             </div>
             <div class="col-md-6">
                 <div class="text-center mb-4">
-                    <h6>Следующее изображение #{{ next_image.id if next_image else 'N/A' }}</h6>
+                    <h6>Следующее изображение: {{ next_image.filename if next_image else 'N/A' }}</h6>
                     {% if next_image %}
                     <img src="/{{ next_image.processed_path }}/{{ next_image.filename }}" 
                          class="img-fluid next-image"

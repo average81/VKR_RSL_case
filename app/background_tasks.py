@@ -202,15 +202,16 @@ def process_images_task(
                             models.Image.filename == last_processed_image,
                             models.Image.task_id == task_id
                         ).first()
-
+                        duplicate_series_name = last_processed_image.split(".")[0]
                         if db_image:
                             db_image.is_duplicate = True
                             db_image.is_main_duplicate = True
                             db_image.processed_path = duplicates_dir
+                            db_image.duplicate_group=duplicate_series_name
                             db.commit()
 
-                        local_duplicates.append(last_processed_image)
-                        duplicate_series_name = last_processed_image.split(".")[0]
+                    local_duplicates.append(last_processed_image)
+
 
                     # Копирование текущего дубликата
                     duplicates_dir = os.path.join(output_dir, "duplicates", duplicate_series_name)
@@ -255,10 +256,10 @@ def process_images_task(
                             best_img_id = Dprocessor.get_best_quality_image(local_dup_imgs)
                             best_img_name = local_duplicates[best_img_id]
 
-                            # Копирование лучшего изображения в основную директорию
+                            # Перемещение лучшего изображения в основную директорию
                             src = os.path.join(output_dir, "duplicates", duplicate_series_name, best_img_name)
                             dst = os.path.join(output_dir, best_img_name)
-                            shutil.copy2(src, dst)
+                            shutil.move(src, dst)
 
                             # Обновление записи в базе данных
                             db_image = db.query(models.Image).filter(

@@ -637,7 +637,7 @@ async def save_unduplicate_pair(
             if request.is_duplicate:
                 next_image.is_duplicate = True
                 if request.next_duplicate_group:
-                    next_image.duplicate_group = request.next_duplicate_group
+
                     
                     # Определяем путь для группы дубликатов
                     if task.output_path:
@@ -666,6 +666,34 @@ async def save_unduplicate_pair(
                         
                         # Обновляем путь обработки следующего изображения
                         next_image.processed_path = next_duplicate_group_path
+
+                    # Проверяем следующие изображения на принадлежность к той же группе дубликатов
+                    if next_image.duplicate_group:
+                        following_images = db.query(Image).filter(
+                            Image.task_id == task_id,
+                            Image.id > next_image.id,
+                            Image.duplicate_group == next_image.duplicate_group
+                        ).order_by(Image.id).all()
+                        
+                        for following_img in following_images:
+                            if following_img.is_duplicate:
+
+                                
+                                # Перемещаем файл, если он еще не в нужной папке
+                                old_file_path = os.path.join(following_img.processed_path, following_img.filename)
+                                new_file_path = os.path.join(next_duplicate_group_path, following_img.filename)
+                                following_img.processed_path = next_duplicate_group_path
+                                following_img.duplicate_group = request.next_duplicate_group
+                                if old_file_path != new_file_path and os.path.exists(old_file_path):
+                                    try:
+                                        os.rename(old_file_path, new_file_path)
+                                    except Exception as e:
+                                        logger.error(f"Ошибка при перемещении файла {old_file_path}: {str(e)}")
+                                        raise HTTPException(
+                                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                                            detail=f"Ошибка при перемещении файла {following_img.filename}: {str(e)}"
+                                        )
+                    next_image.duplicate_group = request.next_duplicate_group
             next_image.validation_status = "user_validated"
             next_image.validated_by = current_user.id
             if next_image.is_main_duplicate:
