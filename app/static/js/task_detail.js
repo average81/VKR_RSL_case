@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         setTimeout(refreshProgress, 2000);
                     } else {
                         // При достижении 100% проверяем статус задачи перед обновлением страницы
-                        if (!window.taskData || window.taskData.status !== 'on_user_review') {
+                        if (!window.taskData && window.taskData.status == 'in_progress') {
                             setTimeout(() => {
                                 location.reload();
                             }, 1000);
@@ -311,4 +311,58 @@ async function viewDuplicates() {
 
 async function viewIssues() {
     alert('Функция просмотра выпусков временно недоступна');
+}
+
+// Функция завершения задачи с проверкой статусов
+async function completeTask(taskId) {
+    if (!confirm('Вы уверены, что хотите завершить задачу? Будет проверено, что все изображения прошли валидацию.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/tasks/${taskId}/user_complete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                image_ids: []  // Можно передать подтвержденные изображения, если нужно
+            })
+        });
+
+        if (response.ok) {
+            alert('Задача успешно завершена!');
+            location.reload(); // Перезагружаем страницу для обновления статуса
+        } else {
+            const data = await response.json();
+            if (response.status === 400 && data.detail.includes('Не все изображения прошли валидацию')) {
+                const confirmOverride = confirm('Не все изображения прошли валидацию. Вы действительно хотите завершить задачу?');
+                if (confirmOverride) {
+                    // Повторная попытка с подтверждением
+                    const overrideResponse = await fetch(`/processing/stage1/${taskId}/user_complete?force=true`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            image_ids: []
+                        })
+                    });
+                    
+                    if (overrideResponse.ok) {
+                        alert('Задача завершена принудительно!');
+                        location.reload();
+                    } else {
+                        const errorData = await overrideResponse.json();
+                        alert(`Ошибка при завершении задачи: ${errorData.detail}`);
+                    }
+                }
+            } else {
+                const errorData = await response.json();
+                alert(`Ошибка при завершении задачи: ${errorData.detail}`);
+            }
+        }
+    } catch (error) {
+        alert(`Ошибка при завершении задачи: ${error.message}`);
+    }
 }

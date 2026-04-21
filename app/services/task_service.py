@@ -218,9 +218,8 @@ class TaskService:
         valid_transitions = {
             TaskStatus.PENDING: [],
             TaskStatus.IN_PROGRESS: [TaskStatus.PAUSED],
-            TaskStatus.ON_USER_REVIEW:[TaskStatus.IN_PROGRESS,TaskStatus.PAUSED],
-            TaskStatus.ON_VALIDATION:[TaskStatus.ON_USER_REVIEW],
-            TaskStatus.COMPLETED: [TaskStatus.ON_VALIDATION],
+            TaskStatus.ON_USER_REVIEW:[TaskStatus.ON_VALIDATION],
+            TaskStatus.ON_VALIDATION:[TaskStatus.ON_USER_REVIEW, TaskStatus.STOPPED,TaskStatus.COMPLETED,TaskStatus.IN_PROGRESS],
             TaskStatus.PAUSED: [TaskStatus.IN_PROGRESS]
         }
         
@@ -502,3 +501,21 @@ class TaskService:
             ValidationException: If status transition is invalid
         """
         return self.update_task_status(task_id, TaskStatus.IN_PROGRESS, user)
+
+    def complete_user_task(self, task_id: int, user: User) -> Task:
+        """
+        Complete a task by changing its status to 'completed'.
+        
+        Args:
+            task_id (int): ID of the task to complete
+            user (User): User completing the task
+            
+        Returns:
+            Task: Updated task object
+            
+        Raises:
+            TaskNotFoundException: If task doesn't exist
+            PermissionDeniedException: If user doesn't have sufficient privileges
+            ValidationException: If status transition is invalid
+        """
+        return self.update_task_status(task_id, TaskStatus.ON_VALIDATION, user)

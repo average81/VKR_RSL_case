@@ -234,6 +234,10 @@
             <a href="/processing/unduplicates/stage1/{{ task.id }}" class="btn btn-sm btn-primary">
                 <i class="bi bi-image"></i> Просмотреть уникальные изображения
             </a>
+            <span class="mx-2"></span>
+            <button class="btn btn-sm btn-success" onclick="completeTask({{ task.id }})">
+                <i class="bi bi-check-circle"></i> Завершить задачу
+            </button>
             {% elif task.stage == 2 %}
             <button class="btn btn-sm btn-primary" onclick="viewIssues()">
                 <i class="bi bi-diagram-3"></i> Просмотреть выпуски

@@ -290,7 +290,7 @@ async def delete_task(
 
 
 
-@router.post("/{task_id}/complete", response_model=TaskSchema)
+@router.post("/{task_id}/user_complete", response_model=TaskSchema)
 async def complete_task(
     request: Request,
     task_id: int,
@@ -309,7 +309,7 @@ async def complete_task(
     if not check_task_access(request, current_user, task):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
-    return task_service.complete_task(task_id)
+    return task_service.complete_user_task(task_id, current_user)
 
 
 @router.post("/{task_id}/validate", response_model=TaskSchema)
