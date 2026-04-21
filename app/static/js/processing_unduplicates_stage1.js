@@ -1,11 +1,12 @@
 // JavaScript для обработки страницы processing_unduplicates_stage1.html
 
 /**
- * Основной объект для управления обработкой одиночных изображений
+ * Основной объект для управления обработкой пар изображений
  */
 const ProcessingUnduplicatesStage1 = {
     taskId: null,
-    imageId: null,
+    currentImageId: null,
+    nextImageId: null,
     
     /**
      * Инициализация страницы обработки
@@ -13,7 +14,8 @@ const ProcessingUnduplicatesStage1 = {
     init: function() {
         // Получаем данные из глобального объекта или атрибутов элементов
         this.taskId = parseInt(document.getElementById('processing-unduplicates-stage1').dataset.taskId);
-        this.imageId = document.getElementById('processing-unduplicates-stage1').dataset.imageId;
+        this.currentImageId = document.getElementById('processing-unduplicates-stage1').dataset.currentImageId;
+        this.nextImageId = document.getElementById('processing-unduplicates-stage1').dataset.nextImageId;
         
         // Получаем список всех image_id из data-атрибута
         this.imageIds = document.getElementById('processing-unduplicates-stage1').dataset.imageIds
@@ -33,22 +35,23 @@ const ProcessingUnduplicatesStage1 = {
         document.getElementById('next-image-btn')?.addEventListener('click', () => this.navigateImage('next'));
         
         // Обработчик для кнопки сохранения и перехода к следующему изображению
-        document.getElementById('save-and-next-btn')?.addEventListener('click', () => this.saveImage());
+        document.getElementById('save-and-next-btn')?.addEventListener('click', () => this.savePair());
         
         // Обработчик для кнопки завершения этапа
         document.getElementById('complete-stage-btn')?.addEventListener('click', () => this.completeStage());
 
-        // Обработчик для чекбокса подтверждения изображения
-        document.getElementById('confirm-image')?.addEventListener('change', (e) => this.handleImageConfirmChange(e.target));
+        // Обработчики для чекбоксов подтверждения изображений
+        document.getElementById('confirm-current-image')?.addEventListener('change', (e) => this.handleImageConfirmChange('current', e.target));
+        document.getElementById('confirm-next-image')?.addEventListener('change', (e) => this.handleImageConfirmChange('next', e.target));
     },
     
     /**
-     * Навигация между одиночными изображениями
+     * Навигация между парами изображений
      * @param {string} direction - 'prev' или 'next'
      */
     navigateImage: function(direction) {
         // Используем предварительно загруженный список imageIds
-        const currentIndex = this.imageIds.indexOf(this.imageId);
+        const currentIndex = this.imageIds.indexOf(this.currentImageId);
         
         let newIndex;
         if (direction === 'next') {
@@ -64,47 +67,67 @@ const ProcessingUnduplicatesStage1 = {
     },
     
     /**
-     * Сохранение текущего изображения
+     * Обработка пары изображений
      */
-    saveImage: async function() {
-        // Получаем текущий image_id из DOM
+    savePair: async function() {
         const container = document.getElementById('processing-unduplicates-stage1');
-        const currentImageId = container.dataset.imageId;
-        const isConfirmed = document.getElementById('confirm-image').checked;
+        const isCurrentConfirmed = document.getElementById('confirm-current-image')?.checked ?? true;
+        const isNextConfirmed = document.getElementById('confirm-next-image')?.checked ?? true;
         
-        if (!currentImageId) {
-            alert('Ошибка: Не удалось получить ID изображения');
+        if (!this.currentImageId) {
+            alert('Ошибка: Не удалось получить ID текущего изображения');
             return;
         }
         
-        // Логируем данные запроса
-        console.log('Sending request with:', {
-            taskId: this.taskId,
-            imageId: currentImageId,
-            confirmed: isConfirmed,
-            action: 'save'
-        });
+        // Определяем, является ли пара дубликатами
+        const isDuplicate = !(isCurrentConfirmed && isNextConfirmed);
+
+        // Формируем данные для отправки
+        const data = {
+            action: 'save_pair',
+            current_image_id: this.currentImageId,
+            next_image_id: this.nextImageId || null,
+            current_image_confirmed: isCurrentConfirmed,
+            next_image_confirmed: isNextConfirmed
+        };
+
+        // Если изображения не являются дубликатами, устанавливаем флаг
+        if (!isDuplicate) {
+            data.is_duplicate = false;
+        } else {
+            // Если это дубликаты, устанавливаем соответствующие флаги
+            data.is_duplicate = true;
+
+            // Используем data-атрибут для получения базового имени файла
+            const currentImageElement = document.querySelector(`img[data-image-id="${this.currentImageId}"]`);
+            const currentImageFilename = currentImageElement?.dataset.filenameBase;
+            data.next_duplicate_group = `${currentImageFilename}`;
+            // Для следующего изображения устанавливаем duplicate_group если оно не подтверждено
+            if (!isNextConfirmed && this.nextImageId) {
+                // Используем ту же группу, что и для текущего изображения
+                const currentImageElement = document.querySelector(`img[data-image-id="${this.currentImageId}"]`);
+                const currentImageFilename = currentImageElement?.dataset.filenameBase;
+
+            }
+        }
 
         try {
-            // Отправляем POST запрос для сохранения статуса текущего изображения
-            const response = await fetch(`/processing/unduplicates/stage1/${this.taskId}/image/${currentImageId}`, {
+            // Отправляем POST запрос для сохранения статуса пары изображений
+            const response = await fetch(`/processing/unduplicates/stage1/${this.taskId}/pair`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    confirmed: isConfirmed,
-                    action: 'save'
-                })
+                body: JSON.stringify(data)
             });
 
             if (!response.ok) {
-                const data = await response.json();
-                alert('Ошибка при сохранении изображения: ' + data.detail);
+                const result = await response.json();
+                alert('Ошибка при сохранении пары изображений: ' + result.detail);
                 return;
             }
 
-            // Переходим к следующему изображению
+            // Переходим к следующей паре изображений
             this.navigateImage('next');
             
         } catch (error) {
@@ -113,7 +136,7 @@ const ProcessingUnduplicatesStage1 = {
     },
 
     /**
-     * Завершение первого этапа обработки одиночных изображений
+     * Завершение первого этапа обработки пар изображений
      */
     completeStage: function() {
         window.location.href = `/tasks/${this.taskId}`;
@@ -121,10 +144,16 @@ const ProcessingUnduplicatesStage1 = {
     
     /**
      * Обработчик изменения состояния чекбокса подтверждения изображения
+     * @param {string} imageType - 'current' или 'next'
      * @param {HTMLInputElement} checkbox - элемент чекбокса
      */
-    handleImageConfirmChange: function(checkbox) {
-        console.log(`Изображение ${this.imageId} подтверждено: ${checkbox.checked}`);
+    handleImageConfirmChange: function(imageType, checkbox) {
+        console.log(`Изображение ${imageType} подтверждено: ${checkbox.checked}`);
+        
+        // Если чекбокс снят, изображение считается дубликатом
+        if (!checkbox.checked) {
+            console.log(`Изображение ${imageType} помечено как дубликат`);
+        }
     }
 };
 

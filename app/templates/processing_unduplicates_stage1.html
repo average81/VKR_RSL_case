@@ -1,17 +1,18 @@
 {% extends "base.html" %}
 
-{% block title %}Обработка - Этап 1: Проверка одиночных изображений - {{ task.title }}{% endblock %}
+{% block title %}Обработка - Этап 1: Проверка пар изображений - {{ task.title }}{% endblock %}
 
 {% block content %}
 <!-- Главный контейнер с данными для JavaScript -->
 <div id="processing-unduplicates-stage1" 
      data-task-id="{{ task.id }}" 
-     data-image-id="{{ current_image.id }}"
+     data-current-image-id="{{ current_image.id }}"
+     data-next-image-id="{{ next_image.id if next_image else '' }}"
      data-image-ids="{{ image_ids|join(',') }}">
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h1>Этап 1: Проверка одиночных изображений</h1>
+        <h1>Этап 1: Проверка пар изображений</h1>
         <p class="text-muted">Задача: {{ task.title }}</p>
     </div>
     <div class="text-end">
@@ -49,34 +50,54 @@
     </div>
 </div>
 
-<!-- Информация об изображении -->
+<!-- Пара изображений -->
 <div class="card mb-4">
     <div class="card-header bg-light">
-        <h5 class="mb-0">Изображение #{{ current_image.id }}</h5>
+        <h5 class="mb-0">Пара изображений</h5>
     </div>
     <div class="card-body">
         <p class="text-muted mb-4">
-            Это изображение не вошло ни в одну группу дубликатов. Проверьте его качество и подтвердите, что его нужно сохранить.
+            Проверьте пару изображений. Если они не являются дубликатами, поставьте галочку.
         </p>
 
-        <!-- Отображение изображения -->
-        <div class="text-center mb-4">
-            <img src="/{{ current_image.processed_path }}/{{ current_image.filename }}" 
-                 class="img-fluid" style="max-height: 600px; object-fit: contain; background: #f8f9fa;">
-        </div>
-
-        <!-- Информация о файле -->
+        <!-- Отображение пары изображений -->
         <div class="row">
             <div class="col-md-6">
-                <div class="mb-3">
-                    <label class="form-label">Имя файла</label>
-                    <input type="text" class="form-control" value="{{ current_image.filename }}" readonly>
+                <div class="text-center mb-4">
+                    <h6>Текущее изображение #{{ current_image.id }}</h6>
+                    <img src="/{{ current_image.processed_path }}/{{ current_image.filename }}" 
+                         class="img-fluid current-image" 
+                         data-image-id="{{ current_image.id }}"
+                         data-filename="{{ current_image.filename }}"
+                         data-filename-base="{{ current_image.filename.split('.')[0] }}"
+                         style="max-height: 600px; object-fit: contain; background: #f8f9fa;">
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" id="confirm-current-image" checked>
+                        <label class="form-check-label" for="confirm-current-image">
+                            Не дубликат
+                        </label>
+                    </div>
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="mb-3">
-                    <label class="form-label">Путь</label>
-                    <input type="text" class="form-control" value="{{ current_image.processed_path }}" readonly>
+                <div class="text-center mb-4">
+                    <h6>Следующее изображение #{{ next_image.id if next_image else 'N/A' }}</h6>
+                    {% if next_image %}
+                    <img src="/{{ next_image.processed_path }}/{{ next_image.filename }}" 
+                         class="img-fluid next-image"
+                         data-image-id="{{ next_image.id }}"
+                         data-filename="{{ next_image.filename }}"
+                         data-filename-base="{{ next_image.filename.split('.')[0] }}"
+                         style="max-height: 600px; object-fit: contain; background: #f8f9fa;">
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" id="confirm-next-image" checked>
+                        <label class="form-check-label" for="confirm-next-image">
+                            Не дубликат
+                        </label>
+                    </div>
+                    {% else %}
+                    <p class="text-muted">Больше изображений нет</p>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -87,14 +108,7 @@
 <div class="card">
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="confirm-image" checked>
-                    <label class="form-check-label" for="confirm-image">
-                        Подтвердить сохранение изображения
-                    </label>
-                </div>
-            </div>
+
             <div class="btn-group" role="group">
                 <button class="btn btn-primary" id="save-and-next-btn">Сохранить и следующее</button>
                 <button class="btn btn-success" id="complete-stage-btn">Выйти</button>
