@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response, Form, Body
 from starlette.responses import RedirectResponse
 from typing import List, Dict, Any, Optional
-import json
+import os
 
 from pydantic import BaseModel
 
@@ -13,6 +13,7 @@ from app.models.image import Image
 from app.services.task_service import TaskService
 from app.database import get_db
 from app.main import templates
+from utils.utils import open_dataset
 import asyncio
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -161,7 +162,15 @@ async def get_task(request: Request, response: Response, task_id: int, current_u
     progress_history = []  # Инициализация истории прогресса
 
     # Получаем все изображения задачи
-    images = db.query(Image).filter(Image.task_id == task.id).all()
+    images_query = db.query(Image).filter(Image.task_id == task.id)
+    
+    # Если задача на втором этапе, фильтруем изображения
+    if task.stage == 2:
+        images_query = images_query.filter(
+            Image.is_duplicate == Image.is_main_duplicate
+        )
+    
+    images = images_query.all()
 
     # Обновляем статистику
     stats['total_images'] = task.total_images
@@ -401,7 +410,7 @@ async def resume_task(
     return task_service.resume_task(task_id, current_user)
 
 @router.post("/{task_id}/review")
-async def resume_task(
+async def send_to_review(
         request: Request,
         task_id: int,
         current_user = Depends(get_current_user),
@@ -420,6 +429,85 @@ async def resume_task(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     return task_service.review_task(task_id, current_user)
+
+@router.post("/{task_id}/start_stage2")
+async def start_stage2(
+        request: Request,
+        task_id: int,
+        body: Dict[str, str] = Body(...),
+        current_user = Depends(get_current_user),
+        db = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Запуск второго этапа обработки (группировка по выпускам).
+    Меняет статус задачи на pending, обновляет пути:
+    - input_path -> output_path первого этапа
+    - output_path -> output/task_id/stage2
+    - logos_path -> переданное значение с HTML-страницы
+    Проверяет, что запрос отправлен начальником группы и изменение статуса допустимо.
+    """
+    task_service = TaskService(db)
+    task = task_service.get_task_by_id(task_id, current_user)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    if not check_task_access(request, current_user, task):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    # Проверка, что пользователь является начальником группы
+    if not hasattr(current_user, 'is_group_leader') or not current_user.is_group_leader:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ разрешен только начальнику группы")
+
+    # Проверяем, что задача находится на первом этапе и завершена
+    if task.stage != 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Задача должна быть на первом этапе")
+    
+    if task.status != "completed":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Задача должна быть завершена перед запуском второго этапа")
+
+    # Проверяем наличие logos_path в теле запроса
+    logo_folder = body.get('logo_folder')
+    if not logo_folder:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Не указан путь к папке с логотипами")
+
+    # Сохраняем старый output_path как input_path для второго этапа
+    old_output_path = task.output_path
+    
+    # Формируем новый output_path
+    new_output_path = f"output/{task_id}/stage2"
+    
+    # Обновляем задачу
+    #task.input_path = old_output_path
+    #task.output_path = new_output_path
+    task.logos_path = logo_folder
+    task.stage = 2
+    task.status = "pending"
+    task.progress = 0
+    # Count total images in input directory
+    if task.validate_stage1:
+        input_path = task.output_path
+    else:
+        input_path = task.input_path
+    if os.path.exists(input_path):
+        try:
+            images, _ = open_dataset(input_path)
+            task.total_images = len(images)
+        except Exception as e:
+            # If there's an error counting images, set to 0
+            task.total_images = 0
+    # Сохраняем изменения
+    db.commit()
+    db.refresh(task)
+    
+    return {
+        "message": "Второй этап обработки запущен",
+        "task_id": task_id,
+        "input_path": task.input_path,
+        "output_path": task.output_path,
+        "logos_path": task.logos_path,
+        "stage": task.stage,
+        "status": task.status
+    }
 
 # Region Processing Settings Handlers
 @router.get("/settings/{task_id}")

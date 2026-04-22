@@ -89,7 +89,10 @@ def open_dataset(path):
             images.append(file)
             #Добавление разметки в список
             name = file.split('.')[0]
-            defects.append(xml_to_dict(os.path.join(path, name + '.xml')))
+            try:
+                defects.append(xml_to_dict(os.path.join(path, name + '.xml')))
+            except:
+                pass
     return images, defects
 
 def get_roc_auc_curve_data(df: pd.DataFrame, prob_col: str = 'score', true_label_col: str = 'true_dupl'):

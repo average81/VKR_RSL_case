@@ -26,7 +26,7 @@
         </a>
         {% endif %}
         
-        {% if task.status == 'completed' and not task.validated_at and current_user.is_group_leader %}
+        {% if task.status == 'validation_in_process' and not task.validated_at and current_user.is_group_leader %}
         <button class="btn btn-success" onclick="validateTask({{ task.id }})">
             <i class="bi bi-check2"></i> Подтвердить выполнение
         </button>
@@ -70,8 +70,8 @@
     <div class="col-md-3">
         <div class="card text-center">
             <div class="card-body">
-                <h5 class="card-title">{{ task.stage_name }}</h5>
-                <p class="card-text text-muted">Этап обработки</p>
+                <h5 class="card-title">Этап обработки</h5>
+                <p class="card-text text-muted">{% if task.stage == 1 %}Группировка по дубликатам{% elif task.stage == 2 %}Сортировка по выпускам{% else %}Неизвестный этап{% endif %}</p>
             </div>
         </div>
     </div>
@@ -199,6 +199,12 @@
                     </button>
                     <button class="btn btn-info" onclick="sendToReprocessing({{ task.id }})">
                         <i class="bi bi-arrow-repeat"></i> Отправить на доработку
+                    </button>
+                    {% endif %}
+                    
+                    {% if task.status == 'completed' and task.stage == 1 and current_user.is_group_leader %}
+                    <button class="btn btn-primary" onclick="openGroupingModal()">
+                        <i class="bi bi-collection"></i> Группировка по выпускам
                     </button>
                     {% endif %}
                     

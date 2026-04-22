@@ -541,6 +541,7 @@ class TaskService:
     def validate_task(self, task_id: int, user: User) -> Task:
         """
         Validate a task by changing its status to 'completed'.
+        Sets validate_stage1 flag and validated_at timestamp.
         
         Args:
             task_id (int): ID of the task to validate
@@ -553,6 +554,22 @@ class TaskService:
             PermissionDeniedException: If user doesn't have sufficient privileges
             ValidationException: If status transition is invalid
         """
+        task = self.task_repo.get_task_by_id(task_id)
+        if not task:
+            raise TaskNotFoundException(f"Task with id {task_id} not found")
 
+        # Проверяем права пользователя
+        if not self._can_user_modify_task(task, user):
+            raise PermissionDeniedException("Insufficient permissions to update this task")
+
+        # Устанавливаем флаг валидации первого этапа
+        task.validate_stage1 = True
+        
+        # Устанавливаем время валидации
+        task.validated_at = datetime.now()
+        
         # Меняем статус на COMPLETED
-        return self.update_task_status(task_id, TaskStatus.COMPLETED, user)
+        task.status = TaskStatus.COMPLETED
+        
+        # Сохраняем изменения
+        return self.task_repo.update_task(task)

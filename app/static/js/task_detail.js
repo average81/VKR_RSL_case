@@ -309,6 +309,87 @@ async function viewDuplicates() {
     alert('Функция просмотра дубликатов временно недоступна');
 }
 
+// Открывает модальное окно для выбора папки логотипов для 2 этапа
+async function openGroupingModal() {
+    const taskId = window.taskData.taskId;
+    const modalHtml = `
+        <div class="modal fade" id="groupingModal" tabindex="-1" aria-labelledby="groupingModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="groupingModalLabel">Группировка по выпускам</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="logoFolder" class="form-label">Папка с логотипами</label>
+                            <input type="text" class="form-control" id="logoFolder" placeholder="Введите путь к папке с логотипами">
+                            <button type="button" class="btn btn-outline-secondary mt-2" onclick="selectLogoFolder()">Выбрать папку</button>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="button" class="btn btn-primary" onclick="startGrouping(${taskId})">Запустить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Добавляем модальное окно в DOM
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Инициализируем модальное окно Bootstrap
+    const modalElement = document.getElementById('groupingModal');
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+
+    // Обработчик закрытия модального окна
+    modalElement.addEventListener('hidden.bs.modal', function () {
+        modalElement.remove();
+    });
+}
+
+// Функция для выбора папки (заглушка)
+function selectLogoFolder() {
+    alert('Функция выбора папки временно недоступна. Введите путь вручную.');
+}
+
+// Запускает процесс группировки по выпускам
+async function startGrouping(taskId) {
+    const logoFolderInput = document.getElementById('logoFolder');
+    const logoFolderPath = logoFolderInput.value.trim();
+    
+    if (!logoFolderPath) {
+        alert('Пожалуйста, укажите путь к папке с логотипами');
+        return;
+    }
+
+    // Формируем URL и данные для запроса
+    const response = await fetch(`/tasks/${taskId}/start_stage2`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            logo_folder: logoFolderPath
+        })
+    });
+
+    if (response.ok) {
+        alert('Группировка по выпускам начата!');
+        // Закрываем модальное окно
+        const modalElement = document.getElementById('groupingModal');
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        modal.hide();
+        // Обновляем страницу
+        location.reload();
+    } else {
+        const data = await response.json();
+        alert('Ошибка: ' + data.detail);
+    }
+}
+
 async function viewIssues() {
     alert('Функция просмотра выпусков временно недоступна');
 }
