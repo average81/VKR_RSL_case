@@ -187,6 +187,21 @@
                     </button>
                     {% endif %}
                     
+                    {% if task.status == 'validation_in_process' and current_user.is_group_leader %}
+                    <a href="/processing/stage1/{{ task.id }}" class="btn btn-primary">
+                        <i class="bi bi-search"></i> Просмотреть дубликаты
+                    </a>
+                    <a href="/processing/unduplicates/stage1/{{ task.id }}" class="btn btn-primary">
+                        <i class="bi bi-image"></i> Просмотреть уникальные изображения
+                    </a>
+                    <button class="btn btn-success" onclick="validateTask({{ task.id }})">
+                        <i class="bi bi-check2"></i> Принять задачу
+                    </button>
+                    <button class="btn btn-info" onclick="sendToReprocessing({{ task.id }})">
+                        <i class="bi bi-arrow-repeat"></i> Отправить на доработку
+                    </button>
+                    {% endif %}
+                    
                     {% if task.status not in ['completed', 'validated', 'stopped'] and task.validator_id == current_user.id %}
                     <button class="btn btn-danger" onclick="cancelTask({{ task.id }})">
                         <i class="bi bi-x-circle"></i> Отменить задачу

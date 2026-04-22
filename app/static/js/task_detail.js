@@ -366,3 +366,25 @@ async function completeTask(taskId) {
         alert(`Ошибка при завершении задачи: ${error.message}`);
     }
 }
+
+
+// Функция для отправки задачи на доработку
+async function sendToReprocessing(taskId) {
+    if (!confirm('Вы действительно хотите отправить задачу на доработку?')) return;
+    
+    try {
+        const response = await fetch(`/tasks/${taskId}/review`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            alert('Задача отправлена на доработку!');
+            location.reload();
+        } else {
+            const data = await response.json();
+            alert('Ошибка: ' + data.detail);
+        }
+    } catch (error) {
+        alert('Ошибка сети: ' + error.message);
+    }
+}

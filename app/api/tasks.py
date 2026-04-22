@@ -331,7 +331,7 @@ async def validate_task(
     if not check_task_access(request, current_user, task):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
-    return task_service.validate_task(task_id)
+    return task_service.validate_task(task_id, current_user)
 
 
 @router.post("/{task_id}/cancel")
@@ -400,6 +400,26 @@ async def resume_task(
 
     return task_service.resume_task(task_id, current_user)
 
+@router.post("/{task_id}/review")
+async def resume_task(
+        request: Request,
+        task_id: int,
+        current_user = Depends(get_current_user),
+        db = Depends(get_db)
+) -> TaskSchema:
+    """
+    Отправка задачи на повторную проверку.
+    Доступно начальнику группы.
+    """
+    task_service = TaskService(db)
+    task = task_service.get_task_by_id(task_id, current_user)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    if not check_task_access(request, current_user, task):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    return task_service.review_task(task_id, current_user)
 
 # Region Processing Settings Handlers
 @router.get("/settings/{task_id}")

@@ -219,7 +219,7 @@ class TaskService:
             TaskStatus.PENDING: [],
             TaskStatus.IN_PROGRESS: [TaskStatus.PAUSED],
             TaskStatus.ON_USER_REVIEW:[TaskStatus.ON_VALIDATION],
-            TaskStatus.ON_VALIDATION:[TaskStatus.ON_USER_REVIEW, TaskStatus.STOPPED,TaskStatus.COMPLETED,TaskStatus.IN_PROGRESS],
+            TaskStatus.ON_VALIDATION:[TaskStatus.ON_USER_REVIEW, TaskStatus.STOPPED,TaskStatus.COMPLETED,TaskStatus.ON_USER_REVIEW],
             TaskStatus.PAUSED: [TaskStatus.IN_PROGRESS]
         }
         
@@ -502,6 +502,24 @@ class TaskService:
         """
         return self.update_task_status(task_id, TaskStatus.IN_PROGRESS, user)
 
+    def review_task(self, task_id: int, user: User) -> Task:
+        """
+        Отправка задачи на повторную проверку.
+
+        Args:
+            task_id (int): ID of the task to resume
+            user (User): User resuming the task
+
+        Returns:
+            Task: Updated task object
+
+        Raises:
+            TaskNotFoundException: If task doesn't exist
+            PermissionDeniedException: If user doesn't have sufficient privileges
+            ValidationException: If status transition is invalid
+        """
+        return self.update_task_status(task_id, TaskStatus.ON_USER_REVIEW, user)
+
     def complete_user_task(self, task_id: int, user: User) -> Task:
         """
         Complete a task by changing its status to 'completed'.
@@ -519,3 +537,22 @@ class TaskService:
             ValidationException: If status transition is invalid
         """
         return self.update_task_status(task_id, TaskStatus.ON_VALIDATION, user)
+
+    def validate_task(self, task_id: int, user: User) -> Task:
+        """
+        Validate a task by changing its status to 'completed'.
+        
+        Args:
+            task_id (int): ID of the task to validate
+            
+        Returns:
+            Task: Updated task object
+            
+        Raises:
+            TaskNotFoundException: If task doesn't exist
+            PermissionDeniedException: If user doesn't have sufficient privileges
+            ValidationException: If status transition is invalid
+        """
+
+        # Меняем статус на COMPLETED
+        return self.update_task_status(task_id, TaskStatus.COMPLETED, user)
