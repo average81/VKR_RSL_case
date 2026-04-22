@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 import os
 import shutil
-from app.background_tasks import process_images_task, ACTIVE_PROCESSES
+from app.background_tasks import process_images_task, ACTIVE_PROCESSES, process_logos_task
 from app import models
 from app.database import get_db, SQLALCHEMY_DATABASE_URL
 from app.api.auth import get_current_active_user
@@ -292,29 +292,52 @@ def start_image_processing(
     if task.status in ["in_progress", "completed", "validated"]:
         raise HTTPException(status_code=400, detail="Task is already in progress, completed or validated")
     
-    # Загрузка конфигурации из TaskBase
-    config = {
-        "db_path": "processed_images.db",
-        "match_threshold": task.match_threshold_stage1 or 0.75,
-        "duplicate_threshold": task.duplicate_threshold_stage1 or 0.7,
-        "matcher": task.matcher_stage1 or "BF",
-        "feature_extractor": task.feature_extractor_stage1 or "KAZE"
-    }
-    # Запуск в отдельном потоке
-    import threading
-    
     # Создаем событие для остановки
     shutdown_event = asyncio.Event()
     
-    # Запускаем в отдельном потоке
-    threading.Thread(target=process_images_task, kwargs={
-        "task_id": task_id,
-        "input_dir": task.input_path,
-        "output_dir": task.output_path,
-        "db_url": SQLALCHEMY_DATABASE_URL,
-        "config": config,
-        "shutdown_event": shutdown_event
-    }, daemon=True).start()
+    # Проверка этапа задачи и запуск соответствующего процесса
+    if task.stage == 1:
+        # Загрузка конфигурации для первого этапа (поиск дубликатов)
+        config = {
+            "db_path": "processed_images.db",
+            "match_threshold": task.match_threshold_stage1 or 0.75,
+            "duplicate_threshold": task.duplicate_threshold_stage1 or 0.7,
+            "matcher": task.matcher_stage1 or "BF",
+            "feature_extractor": task.feature_extractor_stage1 or "KAZE"
+        }
+        
+        # Запуск обработки изображений для поиска дубликатов
+        import threading
+        threading.Thread(target=process_images_task, kwargs={
+            "task_id": task_id,
+            "input_dir": task.input_path,
+            "output_dir": task.output_path,
+            "db_url": SQLALCHEMY_DATABASE_URL,
+            "config": config,
+            "shutdown_event": shutdown_event
+        }, daemon=True).start()
+        
+    elif task.stage == 2:
+        # Загрузка конфигурации для второго этапа (группировка по логотипам)
+        config = {
+            "db_path": "processed_images.db",
+            "match_threshold": task.match_threshold_stage2 or 0.75,
+            "duplicate_threshold": task.duplicate_threshold_stage2 or 0.7,
+            "matcher": task.matcher_stage2 or "BF",
+            "feature_extractor": task.feature_extractor_stage2 or "KAZE"
+        }
+        
+        # Запуск группировки по логотипам
+        input_dir = task.input_path if not task.validate_stage1 else task.output_path
+        
+        import threading
+        threading.Thread(target=process_logos_task, kwargs={
+            "task_id": task_id,
+            "input_dir": input_dir,
+            "output_dir": task.output_path_stage2,
+            "config": config,
+            "logos_path": task.logos_path
+        }, daemon=True).start()
     
     # Сохраняем событие остановки для задачи
     ACTIVE_PROCESSES[task_id]['shutdown_event'] = shutdown_event

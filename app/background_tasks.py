@@ -432,3 +432,246 @@ def group_by_logo_task(task_id: int, input_dir: str, output_dir: str, config_fil
         update_task_status(task_id, "failed")
         
     return result
+
+def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir: str, config) -> dict:
+    """Фоновая задача для поиска логотипов на страницах и их группировки в подпапки выпусков"""
+    result = {
+        "success": False,
+        "message": "",
+        "stats": {},
+        "groups": [],
+        "output_files": []
+    }
+    
+    try:
+        # Обновляем статус задачи
+        update_task_status(task_id, "in_progress")
+        
+        # Проверка существования папок
+        if not os.path.exists(input_dir):
+            raise FileNotFoundError(f"Папка входных изображений не найдена: {input_dir}")
+        
+        if not os.path.exists(logos_dir):
+            raise FileNotFoundError(f"Папка логотипов не найдена: {logos_dir}")
+        
+        # Создание выходной директории
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        
+        # Папка для несортированных изображений
+        unsorted_dir = os.path.join(output_dir, "unsorted")
+        if not os.path.exists(unsorted_dir):
+            os.makedirs(unsorted_dir)
+        
+        # Поддерживаемые форматы изображений
+        supported_formats = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif')
+        
+        # Получение и сортировка списков изображений
+        input_images = [
+            f for f in os.listdir(input_dir)
+            if f.lower().endswith(supported_formats)
+        ]
+        
+        # Естественная сортировка
+        input_images.sort(key=natural_sort_key)
+        
+        if not input_images:
+            logger.warning(f"Нет подходящих изображений во входной папке: {input_dir}")
+            result["message"] = "Нет изображений для обработки"
+            return result
+        
+
+        # Инициализация процессора дубликатов
+        feature_extractor = config.get("feature_extractor", "KAZE")
+        matcher_type = config.get("matcher", "BF")
+        similarity_threshold = config.get("duplicate_threshold", 0.7)
+        match_threshold = config.get("match_threshold", 0.75)
+        
+        processor = DuplicatesProcessor(feature_extractor=feature_extractor, matcher_type=matcher_type)
+        
+        # Получение подпапок с логотипами (выпуски)
+        logo_subfolders = [f for f in os.listdir(logos_dir) if os.path.isdir(os.path.join(logos_dir, f))]
+        
+        # Предварительная загрузка признаков логотипов
+        logo_features = {}
+        for folder_name in logo_subfolders:
+            folder_path = os.path.join(logos_dir, folder_name)
+            logo_images = [f for f in os.listdir(folder_path) if f.lower().endswith(supported_formats)]
+            
+            for logo_name in logo_images:
+                logo_path = os.path.join(folder_path, logo_name)
+                try:
+                    with open(logo_path, 'rb') as f:
+                        file_bytes = f.read()
+                    np_arr = np.frombuffer(file_bytes, np.uint8)
+                    logo_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                    if logo_img is None:
+                        logger.error(f"Не удалось декодировать логотип: {logo_path}")
+                        continue
+                    
+                    kp, des = processor.feature_extractor.extract_features(logo_img)
+                    logo_features[(folder_name, logo_name)] = (kp, des)
+                    logger.info(f"Извлечены признаки из логотипа: {folder_name}/{logo_name}")
+                except Exception as e:
+                    logger.error(f"Ошибка при обработке логотипа {logo_path}: {e}")
+                    continue
+        
+
+        # Переменные для отслеживания группы
+        current_group = None
+        group_folder_path = None
+        group_counter = 0
+        is_first_logo_found = False
+        unsorted_count = 0
+        
+        logger.info(f"Начинаю обработку {len(input_images)} изображений...")
+        
+        for input_img_name in input_images:
+            input_img_path = os.path.join(input_dir, input_img_name)
+            
+            # Чтение изображения
+            try:
+                with open(input_img_path, 'rb') as f:
+                    file_bytes = f.read()
+                np_arr = np.frombuffer(file_bytes, np.uint8)
+                input_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                
+                if input_img is None:
+                    logger.error(f"Не удалось декодировать изображение: {input_img_path}")
+                    continue
+            except Exception as e:
+                logger.error(f"Ошибка при чтении изображения {input_img_path}: {e}")
+                continue
+            
+            # Извлечение признакей
+            kp2, des2 = processor.feature_extractor.extract_features(input_img)
+            
+            if des2 is None or des2.size == 0:
+                logger.warning(f"Пропуск изображения {input_img_name}: не найдено ключевых точек")
+                
+                # Сохраняем в unsorted, если еще не найден первый логотип
+                if not is_first_logo_found:
+                    dst_path = os.path.join(unsorted_dir, input_img_name)
+                    try:
+                        success, encoded_img = cv2.imencode('.png', input_img)
+                        if success:
+                            with open(dst_path, 'wb') as f:
+                                f.write(encoded_img)
+                            unsorted_count += 1
+                        else:
+                            logger.error(f"Не удалось закодировать изображение для сохранения: {dst_path}")
+                    except Exception as e:
+                        logger.error(f"Ошибка при сохранении в unsorted {dst_path}: {e}")
+                else:
+                    # Если группа открыта, копируем в нее
+                    if current_group and group_folder_path:
+                        dst_path = os.path.join(group_folder_path, input_img_name)
+                        try:
+                            success, encoded_img = cv2.imencode('.png', input_img)
+                            if success:
+                                with open(dst_path, 'wb') as f:
+                                    f.write(encoded_img)
+                            else:
+                                logger.error(f"Не удалось закодировать изображение для сохранения: {dst_path}")
+                        except Exception as e:
+                            logger.error(f"Ошибка при сохранении в группу {dst_path}: {e}")
+                
+
+                continue
+            
+            # Поиск лучшего совпадения
+            max_similarity = 0
+            best_folder_name = ""
+            best_logo_name = None
+            
+            for (folder_name, logo_name), (kp1, des1) in logo_features.items():
+                try:
+                    similarity = processor.compare_features(kp1, des1, kp2, des2, match_threshold)
+                    if similarity > max_similarity:
+                        max_similarity = similarity
+                        best_folder_name = folder_name
+                        best_logo_name = logo_name
+                except Exception as e:
+                    logger.error(f"Ошибка при сравнении с логотипом {folder_name}/{logo_name}: {e}")
+                    continue
+            
+            # Проверка на срабатывание логотипа
+            if max_similarity >= similarity_threshold:
+                is_first_logo_found = True
+                
+                # Начинаем новую группу
+                group_counter += 1
+                current_group = f"{best_folder_name}_{group_counter}"
+                group_folder_path = os.path.join(output_dir, current_group)
+                
+                if not os.path.exists(group_folder_path):
+                    os.makedirs(group_folder_path)
+                
+                logger.info(f"Создана группа {current_group} для выпуска {best_folder_name} (схожесть: {max_similarity:.3f})")
+                
+                # Копируем изображение в группу
+                dst_path = os.path.join(group_folder_path, input_img_name)
+                try:
+                    success, encoded_img = cv2.imencode('.png', input_img)
+                    if success:
+                        with open(dst_path, 'wb') as f:
+                            f.write(encoded_img)
+                    else:
+                        logger.error(f"Не удалось закодировать изображение для сохранения: {dst_path}")
+                except Exception as e:
+                    logger.error(f"Ошибка при сохранении изображения {dst_path}: {e}")
+                
+                logger.info(f"{input_img_name}, Логотип '{best_logo_name}' ({round(max_similarity * 100, 4):>6}%) -> {current_group}")
+                
+            else:
+                # Копируем по правилам
+                if not is_first_logo_found:
+                    # Сохраняем в unsorted до первого логотипа
+                    dst_path = os.path.join(unsorted_dir, input_img_name)
+                    try:
+                        success, encoded_img = cv2.imencode('.png', input_img)
+                        if success:
+                            with open(dst_path, 'wb') as f:
+                                f.write(encoded_img)
+                            unsorted_count += 1
+                        else:
+                            logger.error(f"Не удалось закодировать изображение для сохранения: {dst_path}")
+                    except Exception as e:
+                        logger.error(f"Ошибка при сохранении в unsorted {dst_path}: {e}")
+                    
+                    logger.info(f"{input_img_name} -> unsorted (до первого логотипа)")
+                elif current_group and group_folder_path:
+                    # Продолжаем текущую группу
+                    dst_path = os.path.join(group_folder_path, input_img_name)
+                    try:
+                        success, encoded_img = cv2.imencode('.png', input_img)
+                        if success:
+                            with open(dst_path, 'wb') as f:
+                                f.write(encoded_img)
+                        else:
+                            logger.error(f"Не удалось закодировать изображение для сохранения: {dst_path}")
+                    except Exception as e:
+                        logger.error(f"Ошибка при сохранении в группу {dst_path}: {e}")
+                    
+                    logger.info(f"{input_img_name} -> {current_group} (продолжение группы)")
+                else:
+                    # Не копируем, если нет активной группы
+                    logger.info(f"{input_img_name} -> пропущено (после окончания групп)")
+            
+
+
+        # Формируем результат
+        result["success"] = True
+        result["message"] = f"Группировка по логотипам завершена. Обработано {len(input_images)} изображений, {unsorted_count} в unsorted, создано {group_counter} групп."
+        result["groups"] = [f for f in os.listdir(output_dir) if os.path.isdir(os.path.join(output_dir, f))]
+
+        
+        # Обновляем статус задачи
+        update_task_status(task_id, "on_user_review")
+        
+    except Exception as e:
+        result["message"] = f"Исключение при группировке по логотипам: {str(e)}"
+        logger.error(f"Ошибка в process_logos_task: {str(e)}")
+        update_task_status(task_id, "paused")
+        
+    return result
