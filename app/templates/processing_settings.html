@@ -63,13 +63,13 @@
                     <div class="mb-3">
                         <label for="duplicateThreshold" class="form-label">Порог дубликатов ({{ settings.duplicate_threshold }})</label>
                         <input type="range" class="form-range" id="duplicateThreshold" name="duplicate_threshold" 
-                               min="0.5" max="1.0" step="0.05" value="{{ settings.duplicate_threshold }}">
-                        <div class="form-text">Минимальное качество для считать изображения дубликатами</div>
+                               min="0.5" max="1.0" step="0.01" value="{{ settings.duplicate_threshold }}">
+                        <div class="form-text">Минимальное сходство, чтобы считать изображения дубликатами</div>
                     </div>
                     <div class="mb-3">
                         <label for="matchThreshold" class="form-label">Порог сопоставления ({{ settings.match_threshold }})</label>
                         <input type="range" class="form-range" id="matchThreshold" name="match_threshold"
-                               min="0.5" max="1.0" step="0.1" value="{{ settings.match_threshold }}">
+                               min="0.5" max="1.0" step="0.05" value="{{ settings.match_threshold }}">
                         <div class="form-text">Минимальное отношение расстояний для валидации соответствий</div>
                     </div>
 
@@ -109,13 +109,13 @@
                     <div class="mb-3">
                         <label for="clusterThreshold" class="form-label">Порог кластеризации ({{ settings.cluster_threshold }})</label>
                         <input type="range" class="form-range" id="clusterThreshold" name="cluster_threshold" 
-                               min="0.1" max="1.0" step="0.05" value="{{ settings.cluster_threshold }}">
+                               min="0.1" max="1.0" step="0.01" value="{{ settings.cluster_threshold }}">
                         <div class="form-text">Порог определения титульной страницы (схожесть с логотипом)</div>
                     </div>
                     <div class="mb-3">
                         <label for="clustermatchThreshold" class="form-label">Порог сопоставления ({{ settings.clustermatchThreshold }})</label>
                         <input type="range" class="form-range" id="clustermatchThreshold" name="clustermatchThreshold"
-                               min="0.5" max="1.0" step="0.1" value="{{ settings.clustermatchThreshold }}">
+                               min="0.5" max="1.0" step="0.05" value="{{ settings.clustermatchThreshold }}">
                         <div class="form-text">Минимальное отношение расстояний для валидации соответствий</div>
                     </div>
                 </div>

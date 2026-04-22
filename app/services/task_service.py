@@ -82,12 +82,9 @@ class TaskService:
         # Generate output paths based on task ID and stage
         task_id_str = str(created_task.id)
         base_output_path = "output"  # You might want to make this configurable
-        
-        if created_task.stage == 1:
-            created_task.output_path = f"{base_output_path}/{task_id_str}/stage1"
-        else:
-            created_task.output_path = f"{base_output_path}/{task_id_str}/stage2"
-            
+
+        created_task.output_path = f"{base_output_path}/{task_id_str}/stage1"
+
         # For stage 2, also set output_path_stage2
         created_task.output_path_stage2 = f"{base_output_path}/{task_id_str}/stage2"
         
@@ -391,29 +388,7 @@ class TaskService:
         
         return metrics
 
-    def start_two_stage_processing(self, created_by: User) -> Task:
-        """
-        Start the two-stage processing workflow (duplicate detection, issue clustering).
-        
-        Args:
-            created_by (User): User starting the processing
-            
-        Returns:
-            Task: The created processing task
-            
-        Raises:
-            PermissionDeniedException: If user doesn't have sufficient privileges
-        """
-        # Only admins and group leaders can start processing
-        if (hasattr(created_by, 'role') and created_by.role not in [Role.ADMIN, Role.GROUP_LEADER]) or \
-           (not hasattr(created_by, 'role') and not created_by.is_superuser):
-            raise PermissionDeniedException("Only admins and group leaders can start processing")
-        
-        return self.create_task(
-            task_type=TaskType.TWO_STAGE_PROCESSING,
-            created_by=created_by,
-            description="Two-stage processing: duplicate detection followed by issue clustering"
-        )
+
 
     def validate_task_completion(self, task_id: int, validator: User) -> bool:
         """

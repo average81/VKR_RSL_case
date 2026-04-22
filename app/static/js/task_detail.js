@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         setTimeout(refreshProgress, 2000);
                     } else {
                         // При достижении 100% проверяем статус задачи перед обновлением страницы
-                        if (!window.taskData && window.taskData.status == 'in_progress') {
+                        if (window.taskData && window.taskData.status == 'in_progress') {
                             setTimeout(() => {
                                 location.reload();
                             }, 1000);

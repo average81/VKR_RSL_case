@@ -551,8 +551,9 @@ async def get_processing_settings(
             'matcher_stage1': 'matcher',
             'matcher_stage2': 'clustermatcher',
             'match_threshold_stage1': 'match_threshold',
+            'match_threshold_stage2': 'clustermatchThreshold',
             'duplicate_threshold_stage1': 'duplicate_threshold',
-            'duplicate_threshold_stage2': 'clustermatchThreshold',
+            'duplicate_threshold_stage2': 'cluster_threshold',
             'quality_algorithm': 'duplicate_quality'
         }
         
@@ -612,8 +613,8 @@ async def save_processing_settings(
         'duplicate_quality': 'quality_algorithm',
         'clusterfeatureDetector': 'feature_extractor_stage2',
         'clustermatcher': 'matcher_stage2',
-        'cluster_threshold': 'cluster_threshold',
-        'clustermatchThreshold': 'duplicate_threshold_stage2'
+        'cluster_threshold': 'duplicate_threshold_stage2',
+        'clustermatchThreshold': 'match_threshold_stage2'
     }
     
     # Apply settings to task model fields

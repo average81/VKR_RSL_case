@@ -335,10 +335,12 @@ def start_image_processing(
             "task_id": task_id,
             "input_dir": input_dir,
             "output_dir": task.output_path_stage2,
-            "config": config,
-            "logos_path": task.logos_path
+            "logos_dir": task.logos_path,
+            "config": config
         }, daemon=True).start()
     
     # Сохраняем событие остановки для задачи
+    if task_id not in ACTIVE_PROCESSES:
+        ACTIVE_PROCESSES[task_id] = {}
     ACTIVE_PROCESSES[task_id]['shutdown_event'] = shutdown_event
     return {"status": "processing started", "task_id": task_id}

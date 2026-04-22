@@ -39,6 +39,7 @@ class Task(Base):
     feature_extractor_stage2 = Column(String)
     matcher_stage2 = Column(String)
     duplicate_threshold_stage2 = Column(Float)
+    match_threshold_stage2 = Column(Float)
     logos_path = Column(String)
     
     # Параметры валидации
