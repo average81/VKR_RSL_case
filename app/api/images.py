@@ -336,7 +336,9 @@ def start_image_processing(
             "input_dir": input_dir,
             "output_dir": task.output_path_stage2,
             "logos_dir": task.logos_path,
-            "config": config
+            "db_url": SQLALCHEMY_DATABASE_URL,
+            "config": config,
+            "shutdown_event": shutdown_event
         }, daemon=True).start()
     
     # Сохраняем событие остановки для задачи

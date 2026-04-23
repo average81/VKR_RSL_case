@@ -82,7 +82,7 @@
     <div class="card-body">
         <div class="d-flex justify-content-between mb-2">
             <small>Прогресс обработки</small>
-            <small>{{ task.progress }} / {{ task.total_images }} изображений</small>
+            <small id="progress-small">{{ task.progress }} / {{ task.total_images }} изображений</small>
         </div>
         <div class="progress" style="height: 20px;">
             <div class="progress-bar bg-success" role="progressbar" 
@@ -129,12 +129,12 @@
             <div class="col-md-6">
                 <div class="mb-3">
                     <label class="form-label"><i class="bi bi-folder"></i> Входная директория</label>
-                    <div class="fw-medium text-break">{{ task.input_path }}</div>
+                    <div class="fw-medium text-break">{% if task.validate_stage1 %}{{ task.output_path }}{% else %}{{ task.input_path }}{% endif %}</div>
                 </div>
                 
                 <div class="mb-3">
                     <label class="form-label"><i class="bi bi-folder2-open"></i> Выходная директория</label>
-                    <div class="fw-medium text-break">{{ task.output_path }}</div>
+                    <div class="fw-medium text-break">{% if task.stage == 1 %}{{ task.output_path }}{% elif task.stage == 2 %}{{ task.output_path_stage2 }}{% endif %}</div>
                 </div>
                 
                 <div class="mb-3">

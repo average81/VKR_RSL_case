@@ -101,6 +101,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         progressCards[1].textContent = data.processed;
                         progressCards[2].textContent = `${data.progress_percent}%`;
                     }
+                    
+                    // Обновляем текст прогресса в small
+                    const progressSmall = document.getElementById('progress-small');
+                    if (progressSmall) {
+                        progressSmall.textContent = `${data.processed} / ${data.total} изображений`;
+                    }
                     // Обновляем статистику дубликатов (если элементы существуют)
                     const duplicateGroups = document.getElementById('duplicateGroups');
                     if (duplicateGroups) {

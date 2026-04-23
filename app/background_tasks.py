@@ -433,7 +433,25 @@ def group_by_logo_task(task_id: int, input_dir: str, output_dir: str, config_fil
         
     return result
 
-def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir: str, config) -> dict:
+def process_logos_task(
+        task_id: int,
+        input_dir: str,
+        output_dir: str,
+        db_url: str,
+        logos_dir: str, config,
+        shutdown_event: Optional[asyncio.Event] = None):
+    # Создаём новую сессию для фоновой задачи
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    engine = create_engine(db_url)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+    
+    # Добавляем задачу в список активных процессов
+    if task_id not in ACTIVE_PROCESSES:
+        ACTIVE_PROCESSES[task_id] = {}
+    ACTIVE_PROCESSES[task_id] = {'shutdown_event': shutdown_event, 'db': db}
     """Фоновая задача для поиска логотипов на страницах и их группировки в подпапки выпусков"""
     result = {
         "success": False,
@@ -447,6 +465,8 @@ def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir:
         # Обновляем статус задачи
         update_task_status(task_id, "in_progress")
         
+        # Получение задачи
+        task = db.query(models.Task).filter(models.Task.id == task_id).first()
         # Проверка существования папок
         if not os.path.exists(input_dir):
             raise FileNotFoundError(f"Папка входных изображений не найдена: {input_dir}")
@@ -477,9 +497,23 @@ def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir:
         
         if not input_images:
             logger.warning(f"Нет подходящих изображений во входной папке: {input_dir}")
-            result["message"] = "Нет изображений для обработки"
-            return result
+
+            # Закрываем сессию перед выходом
+            db.close()
+            return
+
+        # Получение уже обработанных изображений из базы данных
+        existing_images = db.query(models.Image.filename).filter(models.Image.task_id == task_id).all()
+
+        processed_images = db.query(models.Image.filename).filter(models.Image.task_id == task_id,
+                                                                    models.Image.issue_number >= 0).all()
+
         
+        # Создание простого списка имён файлов из processed_images
+        processed_filenames = [img.filename for img in processed_images]
+        
+        # Фильтрация: пропускаем изображения с совпадающим именем и путем обработки
+        input_images = [img for img in input_images if img not in processed_filenames]
 
         # Инициализация процессора дубликатов
         feature_extractor = config.get("feature_extractor", "KAZE")
@@ -488,13 +522,15 @@ def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir:
         match_threshold = config.get("match_threshold", 0.75)
         
         processor = DuplicatesProcessor(feature_extractor=feature_extractor, matcher_type=matcher_type)
-        
+        # Словарь для хранения счётчиков по каждой папке
+        folder_counters = {}
         # Получение подпапок с логотипами (выпуски)
         logo_subfolders = [f for f in os.listdir(logos_dir) if os.path.isdir(os.path.join(logos_dir, f))]
         
         # Предварительная загрузка признаков логотипов
         logo_features = {}
         for folder_name in logo_subfolders:
+            folder_counters[folder_name] = 0
             folder_path = os.path.join(logos_dir, folder_name)
             logo_images = [f for f in os.listdir(folder_path) if f.lower().endswith(supported_formats)]
             
@@ -520,7 +556,6 @@ def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir:
         # Переменные для отслеживания группы
         current_group = None
         group_folder_path = None
-        group_counter = 0
         is_first_logo_found = False
         unsorted_count = 0
         
@@ -528,7 +563,14 @@ def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir:
         
         for input_img_name in input_images:
             input_img_path = os.path.join(input_dir, input_img_name)
-            
+            # Проверка на сигнал остановки
+            if shutdown_event and shutdown_event.is_set():
+                logger.info(f"Задача {task_id} остановлена по запросу")
+                update_task_status(task_id, "paused", db)
+                # Очистка ссылки на задачу
+                if task_id in ACTIVE_PROCESSES:
+                    del ACTIVE_PROCESSES[task_id]
+                return
             # Чтение изображения
             try:
                 with open(input_img_path, 'rb') as f:
@@ -543,7 +585,7 @@ def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir:
                 logger.error(f"Ошибка при чтении изображения {input_img_path}: {e}")
                 continue
             
-            # Извлечение признакей
+            # Извлечение признаков
             kp2, des2 = processor.feature_extractor.extract_features(input_img)
             
             if des2 is None or des2.size == 0:
@@ -557,6 +599,24 @@ def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir:
                         if success:
                             with open(dst_path, 'wb') as f:
                                 f.write(encoded_img)
+                                # Сохраняем запись в базу данных
+
+                                current_time = datetime.now()
+                                db_image = models.Image(
+                                    filename=input_img_name,
+                                    original_path=input_img_path,
+                                    processed_path=unsorted_dir,
+                                    task_id=task_id,
+                                    is_duplicate=False,
+                                    validation_status="pending",
+                                    created_at=current_time,
+                                    updated_at=current_time,
+                                    issue_name = "unsorted",
+                                    issue_number = 0,
+                                    is_title_page = False
+                                )
+                                db.add(db_image)
+                                db.commit()
                             unsorted_count += 1
                         else:
                             logger.error(f"Не удалось закодировать изображение для сохранения: {dst_path}")
@@ -571,6 +631,29 @@ def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir:
                             if success:
                                 with open(dst_path, 'wb') as f:
                                     f.write(encoded_img)
+                                
+                                # Сохраняем запись в базу данных
+                                current_time = datetime.now()
+                                db_image = models.Image(
+                                    filename=input_img_name,
+                                    original_path=input_img_path,
+                                    processed_path=group_folder_path,
+                                    task_id=task_id,
+                                    is_duplicate=False,
+                                    validation_status="pending",
+                                    created_at=current_time,
+                                    updated_at=current_time,
+                                    issue_name = current_group,
+                                    issue_number = folder_counters[current_group],
+                                    is_title_page = False
+                                )
+                                db.add(db_image)
+                                db.commit()
+
+                                # Инкрементируем прогресс
+                                if task:
+                                    task.progress += 1
+                                    db.commit()
                             else:
                                 logger.error(f"Не удалось закодировать изображение для сохранения: {dst_path}")
                         except Exception as e:
@@ -600,8 +683,9 @@ def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir:
                 is_first_logo_found = True
                 
                 # Начинаем новую группу
-                group_counter += 1
-                current_group = f"{best_folder_name}_{group_counter}"
+                # Увеличиваем счётчик для данной папки
+                folder_counters[best_folder_name] = folder_counters.get(best_folder_name, 0) + 1
+                current_group = best_folder_name
                 group_folder_path = os.path.join(output_dir, current_group)
                 
                 if not os.path.exists(group_folder_path):
@@ -616,6 +700,23 @@ def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir:
                     if success:
                         with open(dst_path, 'wb') as f:
                             f.write(encoded_img)
+                        # Создаем новую запись
+                        current_time = datetime.now()
+                        db_image = models.Image(
+                            filename=input_img_name,
+                            original_path=input_img_path,
+                            processed_path=group_folder_path,
+                            task_id=task_id,
+                            is_duplicate=False,
+                            validation_status="pending",
+                            created_at=current_time,
+                            updated_at=current_time,
+                            issue_name = current_group,
+                            issue_number = folder_counters[current_group],
+                            is_title_page = True
+                        )
+                        db.add(db_image)
+                        db.commit()
                     else:
                         logger.error(f"Не удалось закодировать изображение для сохранения: {dst_path}")
                 except Exception as e:
@@ -634,6 +735,29 @@ def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir:
                             with open(dst_path, 'wb') as f:
                                 f.write(encoded_img)
                             unsorted_count += 1
+                            
+                            # Сохраняем запись в базу данных
+                            current_time = datetime.now()
+                            db_image = models.Image(
+                                filename=input_img_name,
+                                original_path=input_img_path,
+                                processed_path=unsorted_dir,
+                                task_id=task_id,
+                                is_duplicate=False,
+                                validation_status="pending",
+                                created_at=current_time,
+                                updated_at=current_time,
+                                issue_name = "unsorted",
+                                issue_number = 0,
+                                is_title_page = False
+                            )
+                            db.add(db_image)
+                            db.commit()
+
+                            # Инкрементируем прогресс
+                            if task:
+                                task.progress += 1
+                                db.commit()
                         else:
                             logger.error(f"Не удалось закодировать изображение для сохранения: {dst_path}")
                     except Exception as e:
@@ -648,6 +772,29 @@ def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir:
                         if success:
                             with open(dst_path, 'wb') as f:
                                 f.write(encoded_img)
+                            
+                            # Создаем новую запись
+                            current_time = datetime.now()
+                            db_image = models.Image(
+                                filename=input_img_name,
+                                original_path=input_img_path,
+                                processed_path=group_folder_path,
+                                task_id=task_id,
+                                is_duplicate=False,
+                                validation_status="pending",
+                                created_at=current_time,
+                                updated_at=current_time,
+                                issue_name = current_group,
+                                issue_number = folder_counters[current_group],
+                                is_title_page = True
+                            )
+                            db.add(db_image)
+                            db.commit()
+
+                            # Инкрементируем прогресс
+                            if task:
+                                task.progress += 1
+                                db.commit()
                         else:
                             logger.error(f"Не удалось закодировать изображение для сохранения: {dst_path}")
                     except Exception as e:
@@ -662,7 +809,7 @@ def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir:
 
         # Формируем результат
         result["success"] = True
-        result["message"] = f"Группировка по логотипам завершена. Обработано {len(input_images)} изображений, {unsorted_count} в unsorted, создано {group_counter} групп."
+        result["message"] = f"Группировка по логотипам завершена. Обработано {len(input_images)} изображений, {unsorted_count} в unsorted."
         result["groups"] = [f for f in os.listdir(output_dir) if os.path.isdir(os.path.join(output_dir, f))]
 
         
@@ -674,4 +821,4 @@ def process_logos_task(task_id: int, input_dir: str, output_dir: str, logos_dir:
         logger.error(f"Ошибка в process_logos_task: {str(e)}")
         update_task_status(task_id, "paused")
         
-    return result
+    return
