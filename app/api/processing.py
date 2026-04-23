@@ -708,6 +708,178 @@ async def save_unduplicate_pair(
     return {"message": "Пара изображений успешно сохранена"}
 
 
+@router.get("/stage2/{task_id}")
+async def get_processing_stage2(
+    request: Request,
+    task_id: int,
+    group_id: str = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Возвращает страницу для второго этапа обработки задачи - кластеризации по выпускам.
+    
+    Args:
+        request: Объект запроса
+        task_id: ID задачи
+        group_id: ID группы для сопоставления (если None - первая группа)
+        db: Сессия базы данных
+        current_user: Текущий пользователь
+    
+    Returns:
+        Шаблон страницы processing_stage2.html с данными для обработки
+    """
+    # Получаем задачу с проверкой доступа
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Задача не найдена"
+        )
+    
+    # Проверка доступа
+    if not validate_processing_access(task, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав для доступа к задаче"
+        )
+    
+    # Проверка статуса задачи
+    if task.status in ["completed"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Задача не должна быть в статусе 'completed'"
+        )
+    
+    # Проверка этапа
+    if task.stage != 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Этот обработчик предназначен только для этапа 2"
+        )
+    
+    # Получаем все группы изображений для сопоставления
+    # Группы формируются по полю duplicate_group или по имени файла без расширения
+    images = db.query(Image).filter(Image.task_id == task_id,
+                                    Image.issue_number >= 0).all()
+    
+    # Формируем группы для сопоставления
+    matching_groups = {}
+    for image in images:
+        # Определяем группу
+        group_name = image.issue_name
+
+        if group_name not in matching_groups:
+            matching_groups[group_name] = []
+        matching_groups[group_name].append(image)
+
+    # Сортируем группы по имени
+    matching_groups = dict(sorted(matching_groups.items()))
+    
+    if not matching_groups:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Группы для сопоставления не найдены"
+        )
+    
+    # Определяем текущую группу
+    group_ids = list(matching_groups.keys())
+    current_group_idx = 0
+    
+    # Обработка параметра group_id
+    if group_id is not None:
+        # Support for 'prev' and 'next' navigation
+        if group_id == 'prev':
+            current_group_idx = max(0, current_group_idx - 1)
+        elif group_id == 'next':
+            current_group_idx = min(len(group_ids) - 1, current_group_idx + 1)
+        elif group_id in matching_groups:
+            current_group_idx = group_ids.index(group_id)
+    
+    current_group_id = group_ids[current_group_idx]
+    current_group_images = matching_groups[current_group_id]
+    
+    # Формируем данные изображений для шаблона
+    current_group_data = {
+        "id": current_group_id,
+        "images": []
+    }
+    
+    for img in current_group_images:
+        # Определяем путь к изображению
+        if img.processed_path and img.filename:
+            image_path = os.path.join(img.processed_path, img.filename)
+            # Convert to web path
+            image_path = image_path.replace('\\', '/')
+        else:
+            image_path = None
+            
+        current_group_data["images"].append({
+            "id": img.id,
+            "filename": img.filename,
+            "path": image_path
+        })
+    
+    # Получаем все уникальные названия выпусков из таблицы images
+    issue_names = db.query(Image.issue_name).filter(
+        Image.task_id == task_id,
+        Image.issue_name.isnot(None)
+    ).distinct().all()
+    
+    # Формируем список выпусков
+    issues = []
+    for issue_name in issue_names:
+        if issue_name[0]:  # Проверяем, что имя не пустое
+            # Получаем все изображения для этого выпуска
+            issue_images = db.query(Image).filter(
+                Image.task_id == task_id,
+                Image.issue_name == issue_name[0]
+            ).all()
+            
+            # Форматируем данные изображений для выпуска
+            formatted_images = []
+            for img in issue_images:
+                if img.processed_path and img.filename:
+                    image_path = os.path.join(img.processed_path, img.filename)
+                    image_path = image_path.replace('\\', '/')
+                else:
+                    image_path = None
+                    
+                formatted_images.append({
+                    "id": img.id,
+                    "filename": img.filename,
+                    "path": image_path
+                })
+            
+            issues.append({
+                "id": len(issues) + 1,
+                "name": issue_name[0],
+                "images": formatted_images
+            })
+    
+    # Определяем текущий выпуск (если есть)
+    current_issue = issues[0] if issues else None
+    
+    # Формируем данные для шаблона
+    template_data = {
+        "task": task,
+        "current_user": current_user,
+        "current_group": current_group_data,
+        "issues": issues,
+        "current_issue": current_issue,
+        "progress": {
+            "current": current_group_idx + 1,
+            "total": len(group_ids)
+        }
+    }
+    
+    return templates.TemplateResponse(
+        request=request,
+        name="processing_stage2.html",
+        context=template_data
+    )
+
+
 @router.post("/stage1/{task_id}/complete")
 async def complete_stage1(
     task_id: int,

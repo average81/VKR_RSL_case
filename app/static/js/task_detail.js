@@ -397,7 +397,8 @@ async function startGrouping(taskId) {
 }
 
 async function viewIssues() {
-    alert('Функция просмотра выпусков временно недоступна');
+    const taskId = window.taskData.taskId;
+    window.location.href = `/processing/stage2/${taskId}`;
 }
 
 // Функция завершения задачи с проверкой статусов
