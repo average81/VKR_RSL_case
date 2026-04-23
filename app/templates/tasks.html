@@ -191,7 +191,14 @@
                             <option value="2">Группировка по выпускам</option>
                         </select>
                     </div>
-                    
+
+                    <!-- Поле для выбора папки логотипов -->
+                    <div class="mb-3" id="logoPathGroup" style="display: none;">
+                        <label for="logo_path" class="form-label">Путь к папке логотипов</label>
+                        <input type="text" class="form-control" id="logo_path" name="logo_path" placeholder="Пример: /path/to/logos">
+                        <div class="form-text">Укажите путь к папке с логотипами, если выбран этап группировки по выпускам</div>
+                    </div>
+
                     {% if can_create_task %}
                     <div class="mb-3">
                         <label for="owner_id" class="form-label">Назначить сотруднику</label>
@@ -207,6 +214,28 @@
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
                     <button type="submit" class="btn btn-primary">Создать</button>
                 </div>
+
+                <script>
+                    // Показываем/скрываем поле для пути к логотипам в зависимости от выбранного этапа
+                    document.getElementById('stage').addEventListener('change', function() {
+                        const logoPathGroup = document.getElementById('logoPathGroup');
+                        if (this.value === '2') {
+                            logoPathGroup.style.display = 'block';
+                        } else {
+                            logoPathGroup.style.display = 'none';
+                        }
+                    });
+                    // Инициализация видимости при открытии модального окна
+                    window.addEventListener('shown.bs.modal', function () {
+                        const stageSelect = document.getElementById('stage');
+                        const logoPathGroup = document.getElementById('logoPathGroup');
+                        if (stageSelect.value === '2') {
+                            logoPathGroup.style.display = 'block';
+                        } else {
+                            logoPathGroup.style.display = 'none';
+                        }
+                    });
+                </script>
             </form>
         </div>
     </div>

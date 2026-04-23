@@ -817,7 +817,7 @@ def process_logos_task(
         update_task_status(task_id, "on_user_review")
         
     except Exception as e:
-        result["message"] = f"Исключение при группировке по логотипам: {str(e)}"
+
         logger.error(f"Ошибка в process_logos_task: {str(e)}")
         update_task_status(task_id, "paused")
         

@@ -107,21 +107,33 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (progressSmall) {
                         progressSmall.textContent = `${data.processed} / ${data.total} изображений`;
                     }
-                    // Обновляем статистику дубликатов (если элементы существуют)
-                    const duplicateGroups = document.getElementById('duplicateGroups');
-                    if (duplicateGroups) {
-                        duplicateGroups.textContent = data.clusters_found;
-                    }
+                    // Обновляем статистику в зависимости от этапа
+                    if (data.issues !== undefined) {
+                        // Второй этап - статистика по выпускам
+                        const issuesElement = document.getElementById('issues');
+                        const imagesInIssuesElement = document.getElementById('imagesInIssues');
+                        const unassignedImagesElement = document.getElementById('unassignedImages');
+                        
+                        if (issuesElement) issuesElement.textContent = data.issues;
+                        if (imagesInIssuesElement) imagesInIssuesElement.textContent = data.images_in_issues;
+                        if (unassignedImagesElement) unassignedImagesElement.textContent = data.unassigned_images;
+                    } else {
+                        // Первый этап - статистика по дубликатам
+                        const duplicateGroups = document.getElementById('duplicateGroups');
+                        if (duplicateGroups) {
+                            duplicateGroups.textContent = data.clusters_found;
+                        }
 
-                    const duplicateImages = document.getElementById('duplicateImages');
-                    if (duplicateImages) {
-                        duplicateImages.textContent = data.duplicates_found;
-                    }
+                        const duplicateImages = document.getElementById('duplicateImages');
+                        if (duplicateImages) {
+                            duplicateImages.textContent = data.duplicates_found;
+                        }
 
-                    // Обновляем уникальные изображения (если элемент существует)
-                    const uniqueImages = document.getElementById('uniqueImages');
-                    if (uniqueImages) {
-                        uniqueImages.textContent = data.total - data.duplicates_found;
+                        // Обновляем уникальные изображения (если элемент существует)
+                        const uniqueImages = document.getElementById('uniqueImages');
+                        if (uniqueImages) {
+                            uniqueImages.textContent = data.total - data.duplicates_found;
+                        }
                     }
                     
                     // Обновляем график, используя данные о прогрессе

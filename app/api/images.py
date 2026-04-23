@@ -262,6 +262,41 @@ def get_processing_progress(
     if total_images > 0:
         progress_percent = int((processed_images / total_images) * 100)
     
+    # Подготавливаем дополнительную статистику для второго этапа
+    if task.stage == 2:
+        # Получаем все изображения задачи
+        images = db.query(models.Image).filter(models.Image.task_id == task_id).all()
+        
+        # Подсчет выпусков (уникальных комбинаций issue_name и issue_number, кроме 'unsorted')
+        issues = len({
+            (img.issue_name, img.issue_number)
+            for img in images
+            if img.issue_name is not None and img.issue_name != 'unsorted' and img.issue_number is not None
+        })
+        
+        # Подсчет изображений, распределенных по выпускам
+        images_in_issues = sum(
+            1 for img in images
+            if img.issue_name is not None
+            and img.issue_name != 'unsorted'
+            and img.issue_number is not None
+        )
+        
+        # Подсчет нераспределенных изображений
+        unassigned_images = len(images) - images_in_issues
+        
+        return {
+            "total": total_images,
+            "processed": processed_images,
+            "duplicates_found": duplicates_found,
+            "clusters_found": clusters_found,
+            "progress_percent": progress_percent,
+            "issues": issues,
+            "images_in_issues": images_in_issues,
+            "unassigned_images": unassigned_images
+        }
+    
+    # Для первого этапа возвращаем только базовую статистику
     return {
         "total": total_images,
         "processed": processed_images,

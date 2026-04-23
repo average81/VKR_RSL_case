@@ -178,6 +178,23 @@ async def get_task(request: Request, response: Response, task_id: int, current_u
     stats['validated_images'] = sum(1 for image in images if image.validation_status not in ['pending', None])
     stats['duplicate_images'] = sum(1 for image in images if image.is_duplicate and not image.is_main_duplicate)
     stats['title_pages'] = sum(1 for image in images if image.is_title_page)
+    stats['issues'] = len({
+        (img.issue_name, img.issue_number)
+        for img in images
+        if img.issue_name is not None and img.issue_name != 'unsorted' and img.issue_number is not None
+    })
+    stats['images_in_issues'] = sum(
+        1 for img in images
+        if img.issue_name is not None
+        and img.issue_name != 'unsorted'
+        and img.issue_number is not None
+    )
+    stats['unassigned_images'] = sum(
+        1 for img in images
+        if img.issue_name is None
+        or img.issue_number is None
+        or img.issue_name == 'unsorted'
+    )
 
     # Если задача в активном статусе, формируем историю прогресса
     if task.status in ['in_progress', 'pending', 'completed', 'paused']:
@@ -251,6 +268,7 @@ async def create_task_form(
     input_path: str = Form(...),
     stage: str = Form(...),
     owner_id: int = Form(...),
+    logo_path: str = Form(None),  # Опциональный путь к логотипам
     current_user = Depends(get_current_user),
     db = Depends(get_db),
     _ = Depends(check_group_leader)
@@ -268,12 +286,16 @@ async def create_task_form(
         owner_id=owner_id,
     )
 
-    assigned_user = db.query(User).filter(User.id == task_create.owner_id).first()
-    if not assigned_user:
-        raise HTTPException(status_code=404, detail="User not found")
-
+    # Создаём задачу
     task_service = TaskService(db)
     task = task_service.create_task(current_user, task_create)
+
+    # Если выбран этап 2 (группировка по выпускам) и передан путь к логотипам, сохраняем его
+    if int(stage) == 2 and logo_path:
+        task.logos_path = logo_path
+        db.commit()
+        db.refresh(task)
+
     return RedirectResponse(url="/tasks", status_code=status.HTTP_303_SEE_OTHER)
 
 
