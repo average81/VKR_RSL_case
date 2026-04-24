@@ -502,13 +502,11 @@ def process_logos_task(
             db.close()
             return
 
-        # Получение уже обработанных изображений из базы данных
-        existing_images = db.query(models.Image.filename).filter(models.Image.task_id == task_id).all()
 
-        processed_images = db.query(models.Image.filename).filter(models.Image.task_id == task_id,
+        processed_images = db.query(models.Image.filename,models.Image.issue_name,models.Image.issue_number).filter(models.Image.task_id == task_id,
                                                                     models.Image.issue_number >= 0).all()
 
-        
+
         # Создание простого списка имён файлов из processed_images
         processed_filenames = [img.filename for img in processed_images]
         
@@ -523,14 +521,26 @@ def process_logos_task(
         
         processor = DuplicatesProcessor(feature_extractor=feature_extractor, matcher_type=matcher_type)
         # Словарь для хранения счётчиков по каждой папке
+        # Инициализация счётчиков для каждой группы на основе уже обработанных изображений
         folder_counters = {}
+        if processed_images:
+            for img in processed_images:
+                issue_name = img.issue_name
+                issue_number = img.issue_number
+                if issue_name and issue_name != "unsorted":
+                    if issue_name in folder_counters:
+                        folder_counters[issue_name] = max(folder_counters[issue_name], issue_number)
+                    else:
+                        folder_counters[issue_name] = issue_number
+
         # Получение подпапок с логотипами (выпуски)
         logo_subfolders = [f for f in os.listdir(logos_dir) if os.path.isdir(os.path.join(logos_dir, f))]
         
         # Предварительная загрузка признаков логотипов
         logo_features = {}
         for folder_name in logo_subfolders:
-            folder_counters[folder_name] = 0
+            if folder_name not in folder_counters.keys():
+                folder_counters[folder_name] = 0
             folder_path = os.path.join(logos_dir, folder_name)
             logo_images = [f for f in os.listdir(folder_path) if f.lower().endswith(supported_formats)]
             
@@ -558,6 +568,11 @@ def process_logos_task(
         group_folder_path = None
         is_first_logo_found = False
         unsorted_count = 0
+        if processed_images:
+            last_image = processed_images[-1]  # последняя запись
+            current_group = last_image.issue_name
+            is_first_logo_found = True
+            group_folder_path = os.path.join(output_dir, current_group,str(folder_counters[current_group]))
         
         logger.info(f"Начинаю обработку {len(input_images)} изображений...")
         
@@ -686,7 +701,7 @@ def process_logos_task(
                 # Увеличиваем счётчик для данной папки
                 folder_counters[best_folder_name] = folder_counters.get(best_folder_name, 0) + 1
                 current_group = best_folder_name
-                group_folder_path = os.path.join(output_dir, current_group)
+                group_folder_path = os.path.join(output_dir, current_group,str(folder_counters[current_group]))
                 
                 if not os.path.exists(group_folder_path):
                     os.makedirs(group_folder_path)
@@ -717,6 +732,9 @@ def process_logos_task(
                         )
                         db.add(db_image)
                         db.commit()
+                        if task:
+                            task.progress += 1
+                            db.commit()
                     else:
                         logger.error(f"Не удалось закодировать изображение для сохранения: {dst_path}")
                 except Exception as e:

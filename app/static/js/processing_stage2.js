@@ -66,7 +66,14 @@ function selectIssue(issueId) {
 // Загрузка содержимого выпуска
 async function loadIssueContent(issueId) {
     try {
-        const response = await fetch(`/processing/stage2/${taskId}/issue/${issueId}`);
+        const url = issueId ? 
+            `/processing/stage2/${taskId}/issue/${issueId}?group_id=${groupId}` :
+            `/processing/stage2/${taskId}?group_id=${groupId}`;
+        const response = await fetch(url, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
         if (response.ok) {
             const content = await response.text();
             document.getElementById('issueContent').innerHTML = content;
@@ -256,7 +263,12 @@ function updateIssueBadge(issueId) {
 
 // Навигация между группами
 function navigateGroup(direction) {
-    window.location.href = `/processing/stage2/${taskId}?group_id=${direction}`;
+    let url = `/processing/stage2/${taskId}`;
+    if (currentIssueId) {
+        url += `/issue/${currentIssueId}`;
+    }
+    url += `?group_id=${direction}`;
+    window.location.href = url;
 }
 
 // Отмена обработки
@@ -269,7 +281,11 @@ function cancelProcessing() {
 // Сохранение текущей группы
 async function saveGroup() {
     try {
-        const response = await fetch(`/processing/stage2/${taskId}/group/${groupId}`, {
+        let url = `/processing/stage2/${taskId}/group/${groupId}`;
+        if (currentIssueId) {
+            url += `?issue_id=${currentIssueId}`;
+        }
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -295,7 +311,11 @@ async function completeProcessing() {
     if (!confirm('Завершить второй этап обработки?')) return;
 
     try {
-        const response = await fetch(`/processing/stage2/${taskId}/complete`, {
+        let url = `/processing/stage2/${taskId}/complete`;
+        if (currentIssueId) {
+            url += `?issue_id=${currentIssueId}`;
+        }
+        const response = await fetch(url, {
             method: 'POST'
         });
 

@@ -709,10 +709,13 @@ async def save_unduplicate_pair(
 
 
 @router.get("/stage2/{task_id}")
+@router.get("/stage2/{task_id}/issue/{issue_id}")
 async def get_processing_stage2(
     request: Request,
     task_id: int,
+    issue_id: str = None,
     group_id: str = None,
+    is_ajax: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -766,15 +769,15 @@ async def get_processing_stage2(
     # Формируем группы для сопоставления
     matching_groups = {}
     for image in images:
-        # Определяем группу
-        group_name = image.issue_name
+        # Определяем группу по имени и номеру выпуска
+        group_key = (image.issue_name, image.issue_number)
 
-        if group_name not in matching_groups:
-            matching_groups[group_name] = []
-        matching_groups[group_name].append(image)
+        if group_key not in matching_groups:
+            matching_groups[group_key] = []
+        matching_groups[group_key].append(image)
 
-    # Сортируем группы по имени
-    matching_groups = dict(sorted(matching_groups.items()))
+    # Сортируем группы по имени и номеру выпуска
+    matching_groups = dict(sorted(matching_groups.items(), key=lambda x: (x[0][0], x[0][1])))
     
     if not matching_groups:
         raise HTTPException(
@@ -783,7 +786,7 @@ async def get_processing_stage2(
         )
     
     # Определяем текущую группу
-    group_ids = list(matching_groups.keys())
+    group_keys = list(matching_groups.keys())
     current_group_idx = 0
     
     # Обработка параметра group_id
@@ -792,12 +795,23 @@ async def get_processing_stage2(
         if group_id == 'prev':
             current_group_idx = max(0, current_group_idx - 1)
         elif group_id == 'next':
-            current_group_idx = min(len(group_ids) - 1, current_group_idx + 1)
-        elif group_id in matching_groups:
-            current_group_idx = group_ids.index(group_id)
-    
-    current_group_id = group_ids[current_group_idx]
-    current_group_images = matching_groups[current_group_id]
+            current_group_idx = min(len(group_keys) - 1, current_group_idx + 1)
+        else:
+            # Пытаемся найти группу по ID (который теперь формата "name_number")
+            try:
+                # Разбираем ID на имя и номер
+                if '_' in group_id:
+                    name_part, number_part = group_id.rsplit('_', 1)
+                    if number_part.isdigit():
+                        search_key = (name_part, int(number_part))
+                        if search_key in group_keys:
+                            current_group_idx = group_keys.index(search_key)
+            except:
+                pass
+                
+    current_group_key = group_keys[current_group_idx]
+    current_group_id = f"{current_group_key[0]}_{current_group_key[1]}"
+    current_group_images = matching_groups[current_group_key]
     
     # Формируем данные изображений для шаблона
     current_group_data = {
@@ -820,20 +834,22 @@ async def get_processing_stage2(
             "path": image_path
         })
     
-    # Получаем все уникальные названия выпусков из таблицы images
-    issue_names = db.query(Image.issue_name).filter(
+    # Получаем все уникальные комбинации названий и номеров выпусков из таблицы images
+    issue_combinations = db.query(Image.issue_name, Image.issue_number).filter(
         Image.task_id == task_id,
-        Image.issue_name.isnot(None)
+        Image.issue_name.isnot(None),
+        Image.issue_number.isnot(None)
     ).distinct().all()
     
     # Формируем список выпусков
     issues = []
-    for issue_name in issue_names:
-        if issue_name[0]:  # Проверяем, что имя не пустое
-            # Получаем все изображения для этого выпуска
+    for issue_name, issue_number in issue_combinations:
+        if issue_name:  # Проверяем, что имя не пустое
+            # Получаем все изображения для этой комбинации выпуска
             issue_images = db.query(Image).filter(
                 Image.task_id == task_id,
-                Image.issue_name == issue_name[0]
+                Image.issue_name == issue_name,
+                Image.issue_number == issue_number
             ).all()
             
             # Форматируем данные изображений для выпуска
@@ -851,14 +867,29 @@ async def get_processing_stage2(
                     "path": image_path
                 })
             
+            # Создаем имя выпуска с номером
+            issue_display_name = f"{issue_name}"
+            
             issues.append({
-                "id": len(issues) + 1,
-                "name": issue_name[0],
+                "id": f"{issue_name}_{issue_number}",
+                "name": issue_display_name,
+                "number": issue_number,
                 "images": formatted_images
             })
     
     # Определяем текущий выпуск (если есть)
-    current_issue = issues[0] if issues else None
+    current_issue = None
+    target_issue_id = issue_id or group_id  # Приоритет у issue_id, если он передан
+    if issues:
+        # Используем первый выпуск как текущий
+        current_issue = issues[0]
+        
+        # Если в URL передан issue_id или group_id, пытаемся найти соответствующий выпуск
+        if target_issue_id and target_issue_id != 'prev' and target_issue_id != 'next':
+            for issue in issues:
+                if issue["id"] == target_issue_id:
+                    current_issue = issue
+                    break
     
     # Формируем данные для шаблона
     template_data = {
@@ -869,10 +900,20 @@ async def get_processing_stage2(
         "current_issue": current_issue,
         "progress": {
             "current": current_group_idx + 1,
-            "total": len(group_ids)
+            "total": len(group_keys)
         }
     }
     
+    # Проверяем, является ли запрос AJAX-запросом для загрузки контента выпуска
+    if issue_id and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        # Возвращаем только фрагмент содержимого выпуска
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/issue_content.html",
+            context=template_data
+        )
+    
+    # Для обычного запроса возвращаем полную страницу
     return templates.TemplateResponse(
         request=request,
         name="processing_stage2.html",

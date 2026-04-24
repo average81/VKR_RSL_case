@@ -1,0 +1,43 @@
+<div id="issueContent">
+    {% if current_issue %}
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">{{ current_issue.name }}{% if current_issue.number %} - Выпуск {{ current_issue.number }}{% endif %}</h6>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteIssue({{ current_issue.id }})">
+                    <i class="bi bi-trash"></i> Удалить
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Сетка изображений выпуска -->
+            <div class="row g-2">
+                {% for image in current_issue.images %}
+                <div class="col-6 col-md-4 col-lg-3">
+                    <div class="card h-100">
+                        <img src="/{{ image.path }}" class="card-img-top" alt="Изображение" style="height: 120px; object-fit: contain; background: #f8f9fa;">
+                        <div class="card-body p-2">
+                            <small class="text-muted">{{ image.filename[:15] }}{% if image.filename|length > 15 %}...{% endif %}</small>
+                            <button class="btn btn-sm btn-outline-danger w-100 mt-1" 
+                                    onclick="removeFromIssue({{ image.id }}, {{ current_issue.id }})">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% if current_issue.images|length == 0 %}
+                <div class="col-12 text-center text-muted">
+                    <i class="bi bi-images"></i> Нет изображений в выпуске
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+        <i class="bi bi-folder2-open" style="font-size: 3rem;"></i>
+        <p class="mt-3">Выберите выпуск для просмотра содержимого</p>
+    </div>
+    {% endif %}
+</div>
