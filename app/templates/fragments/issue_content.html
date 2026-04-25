@@ -19,7 +19,7 @@
                         <div class="card-body p-2">
                             <small class="text-muted">{{ image.filename[:15] }}{% if image.filename|length > 15 %}...{% endif %}</small>
                             <button class="btn btn-sm btn-outline-danger w-100 mt-1" 
-                                    onclick="removeFromIssue({{ image.id }}, {{ current_issue.id }})">
+                                    onclick="removeFromIssue({{ image.id }}, '{{ current_issue.id }}')">
                                 <i class="bi bi-x"></i>
                             </button>
                         </div>

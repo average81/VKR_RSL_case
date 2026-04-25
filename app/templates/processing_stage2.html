@@ -8,55 +8,18 @@
         <h1>Этап 2: Кластеризация по выпускам</h1>
         <p class="text-muted">Задача: {{ task.title }}</p>
     </div>
-    <div class="text-end">
-        <div class="btn-group" role="group">
-            <button class="btn btn-outline-secondary" onclick="navigateGroup('prev')">
-                <i class="bi bi-arrow-left"></i> Предыдущая
-            </button>
-            <button class="btn btn-outline-secondary" onclick="navigateGroup('next')">
-                Следующая <i class="bi bi-arrow-right"></i>
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Прогресс обработки -->
-<div class="card mb-4">
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-3">
-                <div class="text-center">
-                    <div class="h4 mb-0">{{ progress.current }}</div>
-                    <small class="text-muted">Группа {{ progress.current }} из {{ progress.total }}</small>
-                </div>
-            </div>
-            <div class="col-md-9">
-                <div class="d-flex justify-content-between mb-1">
-                    <small>Общий прогресс</small>
-                    <small>{{ (progress.current / progress.total * 100)|int }}%</small>
-                </div>
-                <div class="progress" style="height: 6px;">
-                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ progress.current / progress.total * 100 }}%"></div>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 
 <!-- Панель управления выпусками -->
 <div class="card mb-4">
-    <div class="card-header bg-light d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Выпуски</h5>
-        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createIssueModal">
-            <i class="bi bi-plus-lg"></i> Создать выпуск
-        </button>
-    </div>
+
     <div class="card-body">
         <div class="row g-3">
             <!-- Список выпусков -->
             <div class="col-md-4">
                 <div class="list-group">
                     {% for issue in issues %}
+                    {% if issue.name != 'unsorted' %}
                     <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center issue-item {% if issue.id == current_issue.id %}active{% endif %}" 
                        data-issue-id="{{ issue.id }}" onclick="selectIssue('{{ issue.id }}')">
                         <div>
@@ -65,6 +28,7 @@
                         </div>
                         <span class="badge bg-secondary rounded-pill">{{ issue.images|length }}</span>
                     </a>
+                    {% endif %}
                     {% endfor %}
                     {% if issues|length == 0 %}
                     <div class="list-group-item text-center text-muted">
@@ -97,7 +61,7 @@
                                         <div class="card-body p-2">
                                             <small class="text-muted">{{ image.filename[:15] }}{% if image.filename|length > 15 %}...{% endif %}</small>
                                             <button class="btn btn-sm btn-outline-danger w-100 mt-1" 
-                                                    onclick="removeFromIssue({{ image.id }}, {{ current_issue.id }})">
+                                                    onclick="removeFromIssue({{ image.id }}, '{{ current_issue.id }}')">
                                                 <i class="bi bi-x"></i>
                                             </button>
                                         </div>
@@ -124,20 +88,20 @@
     </div>
 </div>
 
-<!-- Группа для сопоставления -->
+<!-- Группа нераспределенных изображений -->
 <div class="card">
     <div class="card-header bg-light">
-        <h5 class="mb-0">Группа для сопоставления #{{ current_group.id }}</h5>
+        <h5 class="mb-0">Нераспределенные изображения</h5>
     </div>
     <div class="card-body">
         <p class="text-muted mb-4">
-            Обнаружено {{ current_group.images|length }} изображений, которые необходимо распределить по выпускам.
+            Обнаружено {{ unsorted_group.images|length }} изображений, которые необходимо распределить по выпускам.
             Перетащите изображения в нужные выпуски или создайте новый выпуск.
         </p>
 
         <!-- Сетка изображений для сопоставления -->
-        <div class="row g-3" id="matchingImages">
-            {% for image in current_group.images %}
+        <div class="row g-3" id="unsortedImages">
+            {% for image in unsorted_group.images %}
             <div class="col-6 col-md-4 col-lg-3">
                 <div class="card h-100 draggable-image" draggable="true" data-image-id="{{ image.id }}">
                     <img src="/{{ image.path }}" class="card-img-top" alt="Изображение" style="height: 200px; object-fit: contain; background: #f8f9fa;">
@@ -153,17 +117,9 @@
         <div class="row mt-4">
             <div class="col-12">
                 <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="confirm_all">
-                            <label class="form-check-label" for="confirm_all">
-                                Подтвердить распределение всех изображений
-                            </label>
-                        </div>
-                    </div>
+
                     <div class="btn-group" role="group">
                         <button class="btn btn-outline-secondary" onclick="cancelProcessing()">Отмена</button>
-                        <button class="btn btn-primary" onclick="saveGroup()">Сохранить и следующая</button>
                         <button class="btn btn-success" onclick="completeProcessing()">Завершить этап</button>
                     </div>
                 </div>
@@ -183,8 +139,8 @@
             <div class="modal-body">
                 <div class="mb-3">
                     <label for="issueName" class="form-label">Название выпуска</label>
-                    <input type="text" class="form-control" id="issueName" placeholder="Например: Выпуск 1 - Январь 2024">
-                    <div class="form-text">Рекомендуется использовать формат: "Выпуск N - Месяц Год"</div>
+                    <input type="text" class="form-control" id="issueName" placeholder="Например: Мурзилка">
+                    <div class="form-text">Впишите название выпуска, номер будет назначен автоматически"</div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -200,10 +156,11 @@
 <script>
 // Глобальные переменные, передаваемые из шаблона
 const taskId = {{ task.id }};
-const groupId = "{{ current_group.id }}";
+const groupId = "{{ unsorted_group.id }}";
 let currentIssueId = "{{ current_issue.id if current_issue else '' }}";
 const issueId = "{{ issue_id if issue_id else '' }}";
-const currentGroupImages = {{ current_group.images|tojson|safe }};
+const unsortedImages = {{ unsorted_group.images|tojson|safe }};
+const taskOutputPath = "{{ task.output_path }}";
 </script>
 <script src="/static/js/processing_stage2.js"></script>
 {% endblock %}

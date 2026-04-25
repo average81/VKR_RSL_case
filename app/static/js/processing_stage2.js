@@ -1,4 +1,4 @@
-// Variables provided by the HTML template: taskId, groupId, currentIssueId, currentGroupImages
+// Variables provided by the HTML template: taskId, groupId, currentIssueId, currentGroupImages, taskOutputPath
 
 // Инициализация drag and drop
 function initDragAndDrop() {
@@ -77,6 +77,10 @@ async function loadIssueContent(issueId) {
         if (response.ok) {
             const content = await response.text();
             document.getElementById('issueContent').innerHTML = content;
+            // После загрузки содержимого обновляем счётчик
+            if (currentIssueId) {
+                updateIssueBadge(currentIssueId);
+            }
         }
     } catch (error) {
         console.error('Error loading issue content:', error);
@@ -103,10 +107,10 @@ async function addToIssue(imageId, issueId) {
             // Обновляем содержимое выпуска
             if (issueId == currentIssueId) {
                 loadIssueContent(issueId);
+            } else {
+                // Если выпуск не текущий, обновляем счётчик напрямую
+                updateIssueBadge(issueId);
             }
-            
-            // Обновляем счетчик выпуска
-            updateIssueBadge(issueId);
         } else {
             const data = await response.json();
             alert('Ошибка: ' + data.detail);
@@ -120,6 +124,10 @@ async function addToIssue(imageId, issueId) {
 async function removeFromIssue(imageId, issueId) {
     if (!confirm('Удалить изображение из выпуска?')) return;
     
+    // Получить имя файла из данных изображения, а не из DOM-элемента
+    const image = unsortedImages.find(img => img.id == imageId);
+    const filename = image ? image.filename : `image_${imageId}`;
+
     try {
         const response = await fetch(`/processing/stage2/${taskId}/issue/${issueId}/remove`, {
             method: 'POST',
@@ -127,37 +135,46 @@ async function removeFromIssue(imageId, issueId) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                image_id: parseInt(imageId)
+                image_id: parseInt(imageId),
+                filename: filename
             })
         });
-
         if (response.ok) {
-            // Добавляем изображение обратно в группу сопоставления
-            const matchingImages = document.getElementById('matchingImages');
-            const image = currentGroupImages.find(img => img.id == imageId);
+            // Получаем новый путь из ответа сервера ДО любых обновлений
+            const data = await response.json();
+            // Используем путь из ответа сервера, заменяя обратные слеши на прямые
+            const unsortedImagePath = data.new_path.replace(/\\/g, '/');
             
+            // Удаляем карточку из DOM текущего выпуска до обновления счётчика
+            const imageCard = document.querySelector(`[data-image-id="${imageId}"]`);
+            if (imageCard) {
+                imageCard.closest('.col-6, .col-md-4, .col-lg-3').remove();
+            }
+
+            // Перезагружаем содержимое выпуска, что автоматически обновит счётчик
+            loadIssueContent(issueId);
+            // Добавляем изображение обратно в группу сопоставления
+            const matchingImages = document.getElementById('unsortedImages');
+            
+            // Создаем элемент изображения с корректным путем
             const col = document.createElement('div');
             col.className = 'col-6 col-md-4 col-lg-3';
+            
             col.innerHTML = `
-                <div class="card h-100 draggable-image" draggable="true" data-image-id="${image.id}">
-                    <img src="${image.path}" class="card-img-top" alt="Изображение" style="height: 200px; object-fit: contain; background: #f8f9fa;">
+                <div class="card h-100 draggable-image" draggable="true" data-image-id="${imageId}">
+                    <img src="/${unsortedImagePath}" class="card-img-top" alt="Изображение" style="height: 200px; object-fit: contain; background: #f8f9fa;">
                     <div class="card-body p-2">
-                        <small class="text-muted">${image.filename}</small>
+                        <small class="text-muted">${filename}</small>
                     </div>
                 </div>
             `;
             matchingImages.appendChild(col);
             
-            // Обновляем содержимое выпуска
-            if (issueId == currentIssueId) {
-                loadIssueContent(issueId);
-            }
-            
-            // Обновляем счетчик выпуска
-            updateIssueBadge(issueId);
-            
             // Перестраиваем drag and drop
             initDragAndDrop();
+            
+            // Обновляем счётчик нераспределенных изображений
+            updateUnsortedCounter();
         } else {
             const data = await response.json();
             alert('Ошибка: ' + data.detail);
@@ -257,8 +274,46 @@ async function deleteIssue(issueId) {
 
 // Обновление счетчика выпуска
 function updateIssueBadge(issueId) {
-    // Этот метод будет реализован на бэкенде
-    // Пока что обновляем вручную при необходимости
+    // Находим элемент выпуска по ID
+    const issueElement = document.querySelector(`[data-issue-id="${issueId}"]`);
+    if (!issueElement) return;
+
+    // Находим элементы счётчика и текста
+    const badge = issueElement.querySelector('.badge');
+    const imageCountText = issueElement.querySelector('.text-muted');
+
+    // Получаем текущее количество изображений в выпуске
+    // Считаем только карточки изображений по их уникальному контексту
+    const issueContent = document.getElementById('issueContent');
+    const imageCards = issueContent.querySelectorAll('.row.g-2 .card');
+    let imageCount = imageCards.length;
+
+    // Обновляем счётчик
+    if (badge) {
+        badge.textContent = imageCount;
+    }
+
+    // Обновляем текстовое описание
+    if (imageCountText) {
+        imageCountText.textContent = `${imageCount} изображений`;
+    }
+}
+
+
+// Обновление счетчика нераспределенных изображений
+function updateUnsortedCounter() {
+    // Находим контейнер нераспределенных изображений
+    const unsortedContainer = document.getElementById('unsortedImages');
+    if (!unsortedContainer) return;
+    
+    // Получаем количество изображений в контейнере
+    const imageCount = unsortedContainer.querySelectorAll('.draggable-image').length;
+    
+    // Находим текстовый элемент с описанием
+    const textElement = document.querySelector('.card-body p.text-muted');
+    if (textElement) {
+        textElement.textContent = `Обнаружено ${imageCount} изображений, которые необходимо распределить по выпускам.`;
+    }
 }
 
 // Навигация между группами
@@ -330,12 +385,6 @@ async function completeProcessing() {
         alert('Ошибка сети: ' + error.message);
     }
 }
-
-// Обработка чекбокса "Подтвердить все"
-document.getElementById('confirm_all').addEventListener('change', function() {
-    // Реализация будет зависеть от конкретных требований
-    console.log('Confirm all toggled:', this.checked);
-});
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {

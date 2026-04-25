@@ -761,74 +761,30 @@ async def get_processing_stage2(
             detail="Этот обработчик предназначен только для этапа 2"
         )
     
-    # Получаем все группы изображений для сопоставления
-    # Группы формируются по полю duplicate_group или по имени файла без расширения
-    images = db.query(Image).filter(Image.task_id == task_id,
-                                    Image.issue_number >= 0).all()
+    # Получаем все нераспределенные изображения
+    unsorted_images = db.query(Image).filter(
+        Image.task_id == task_id,
+        (Image.issue_name.is_(None)) | 
+        (Image.issue_number.is_(None)) |
+        (Image.issue_name == 'unsorted')
+    ).all()
     
-    # Формируем группы для сопоставления
-    matching_groups = {}
-    for image in images:
-        # Определяем группу по имени и номеру выпуска
-        group_key = (image.issue_name, image.issue_number)
-
-        if group_key not in matching_groups:
-            matching_groups[group_key] = []
-        matching_groups[group_key].append(image)
-
-    # Сортируем группы по имени и номеру выпуска
-    matching_groups = dict(sorted(matching_groups.items(), key=lambda x: (x[0][0], x[0][1])))
-    
-    if not matching_groups:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Группы для сопоставления не найдены"
-        )
-    
-    # Определяем текущую группу
-    group_keys = list(matching_groups.keys())
-    current_group_idx = 0
-    
-    # Обработка параметра group_id
-    if group_id is not None:
-        # Support for 'prev' and 'next' navigation
-        if group_id == 'prev':
-            current_group_idx = max(0, current_group_idx - 1)
-        elif group_id == 'next':
-            current_group_idx = min(len(group_keys) - 1, current_group_idx + 1)
-        else:
-            # Пытаемся найти группу по ID (который теперь формата "name_number")
-            try:
-                # Разбираем ID на имя и номер
-                if '_' in group_id:
-                    name_part, number_part = group_id.rsplit('_', 1)
-                    if number_part.isdigit():
-                        search_key = (name_part, int(number_part))
-                        if search_key in group_keys:
-                            current_group_idx = group_keys.index(search_key)
-            except:
-                pass
-                
-    current_group_key = group_keys[current_group_idx]
-    current_group_id = f"{current_group_key[0]}_{current_group_key[1]}"
-    current_group_images = matching_groups[current_group_key]
-    
-    # Формируем данные изображений для шаблона
-    current_group_data = {
-        "id": current_group_id,
+    # Формируем данные для нераспределенных изображений
+    unsorted_group_data = {
+        "id": "unsorted",
         "images": []
     }
     
-    for img in current_group_images:
+    for img in unsorted_images:
         # Определяем путь к изображению
         if img.processed_path and img.filename:
             image_path = os.path.join(img.processed_path, img.filename)
-            # Convert to web path
+            # Convert to web path by replacing backslashes
             image_path = image_path.replace('\\', '/')
         else:
             image_path = None
             
-        current_group_data["images"].append({
+        unsorted_group_data["images"].append({
             "id": img.id,
             "filename": img.filename,
             "path": image_path
@@ -895,13 +851,9 @@ async def get_processing_stage2(
     template_data = {
         "task": task,
         "current_user": current_user,
-        "current_group": current_group_data,
+        "unsorted_group": unsorted_group_data,
         "issues": issues,
-        "current_issue": current_issue,
-        "progress": {
-            "current": current_group_idx + 1,
-            "total": len(group_keys)
-        }
+        "current_issue": current_issue
     }
     
     # Проверяем, является ли запрос AJAX-запросом для загрузки контента выпуска
@@ -920,6 +872,137 @@ async def get_processing_stage2(
         context=template_data
     )
 
+
+# Модель для тела запроса удаления изображения
+class RemoveImageRequest(BaseModel):
+    image_id: int
+    filename: str
+
+@router.post("/stage2/{task_id}/issue/{issue_id}/remove")
+async def remove_image_from_issue(
+    task_id: int,
+    issue_id: str,
+    request: RemoveImageRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Удаляет изображение из выпуска и возвращает его в нераспределенные.
+    
+    Args:
+        task_id: ID задачи
+        issue_id: ID выпуска (в формате name_number)
+        request: Данные с image_id и filename
+        db: Сессия базы данных
+        current_user: Текущий пользователь
+    
+    Returns:
+        Сообщение об успешном удалении
+    """
+    # Проверяем существование задачи и доступ
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Задача не найдена"
+        )
+    
+    # Проверка доступа
+    if not validate_processing_access(task, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав для доступа к задаче"
+        )
+    
+    # Проверка статуса задачи
+    if task.status in ["completed"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Задача не должна быть в статусе 'completed'"
+        )
+    
+    # Проверка этапа
+    if task.stage != 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Этот обработчик предназначен только для этапа 2"
+        )
+    
+    # Извлекаем название и номер выпуска из issue_id
+    try:
+        issue_name, issue_number_str = issue_id.rsplit('_', 1)
+        issue_number = int(issue_number_str)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неверный формат ID выпуска"
+        )
+    
+    # Находим изображение по ID
+    image = db.query(Image).filter(
+        Image.id == request.image_id,
+        Image.task_id == task_id
+    ).first()
+    
+    if not image:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Изображение не найдено"
+        )
+    
+    # Проверяем, что изображение действительно принадлежит этому выпуску
+    if image.issue_name != issue_name or image.issue_number != issue_number:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Изображение не принадлежит указанному выпуску"
+        )
+    
+    # Формируем путь к папке unsorted
+    if task.output_path:
+        # Используем выходную папку задачи как основу
+        task_output_dir = os.path.dirname(task.output_path)
+        unsorted_path = os.path.join(task_output_dir, "stage2", "unsorted")
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не задан путь вывода для задачи"
+        )
+    
+    # Создаем папку unsorted, если она не существует
+    if not os.path.exists(unsorted_path):
+        os.makedirs(unsorted_path)
+        
+    # Перемещаем файл изображения в папку unsorted
+    old_file_path = os.path.join(image.processed_path, image.filename)
+    new_file_path = os.path.join(unsorted_path, image.filename)
+    
+    if os.path.exists(old_file_path):
+        try:
+            os.rename(old_file_path, new_file_path)
+        except Exception as e:
+            logger.error(f"Ошибка при перемещении файла {old_file_path}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Ошибка при перемещении файла {image.filename}: {str(e)}"
+            )
+    
+    # Обновляем путь обработки изображения
+    image.processed_path = unsorted_path
+    
+    # Обновляем данные изображения
+    image.issue_name = "unsorted"
+    image.issue_number = 0
+    
+    # Сохраняем изменения
+    db.commit()
+    db.refresh(image)
+    
+    logger.info(f"Пользователь {current_user.username} удалил изображение {request.filename} из выпуска {issue_name}_{issue_number} задачи {task_id}")
+    
+    return {
+        "message": "Изображение успешно удалено из выпуска",
+        "new_path": new_file_path
+    }
 
 @router.post("/stage1/{task_id}/complete")
 async def complete_stage1(
