@@ -878,6 +878,136 @@ class RemoveImageRequest(BaseModel):
     image_id: int
     filename: str
 
+class AddImageRequest(BaseModel):
+    image_id: int
+
+@router.post("/stage2/{task_id}/issue/{issue_id}/add")
+async def add_image_to_issue(
+    task_id: int,
+    issue_id: str,
+    request: AddImageRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Добавляет изображение в выпуск.
+    
+    Args:
+        task_id: ID задачи
+        issue_id: ID выпуска (в формате name_number)
+        request: Данные с image_id и filename
+        db: Сессия базы данных
+        current_user: Текущий пользователь
+    
+    Returns:
+        Сообщение об успешном добавлении
+    """
+    # Проверяем существование задачи и доступ
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Задача не найдена"
+        )
+    
+    # Проверка доступа
+    if not validate_processing_access(task, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав для доступа к задаче"
+        )
+    
+    # Проверка статуса задачи
+    if task.status in ["completed"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Задача не должна быть в статусе 'completed'"
+        )
+    
+    # Проверка этапа
+    if task.stage != 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Этот обработчик предназначен только для этапа 2"
+        )
+    
+    # Извлекаем название и номер выпуска из issue_id
+    try:
+        issue_name, issue_number_str = issue_id.rsplit('_', 1)
+        issue_number = int(issue_number_str)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неверный формат ID выпуска"
+        )
+    
+    # Находим изображение по ID
+    image = db.query(Image).filter(
+        Image.id == request.image_id,
+        Image.task_id == task_id
+    ).first()
+    
+    if not image:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Изображение не найдено"
+        )
+
+    # Проверяем, что изображение находится в папке выпуска
+    if issue_name == image.issue_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Изображение уже не находится в папке {issue_name}"
+        )
+    
+    # Формируем путь к папке выпуска
+    if task.output_path:
+        # Используем выходную папку задачи как основу
+        task_output_dir = os.path.dirname(task.output_path)
+        issue_path = os.path.join(task_output_dir, "stage2", "issues", f"{issue_name}_{issue_number}")
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не задан путь вывода для задачи"
+        )
+    
+    # Создаем папку выпуска, если она не существует
+    if not os.path.exists(issue_path):
+        os.makedirs(issue_path)
+        
+    # Перемещаем файл изображения в папку выпуска
+    old_file_path = os.path.join(image.processed_path, image.filename)
+    new_file_path = os.path.join(issue_path, image.filename)
+    
+    if os.path.exists(old_file_path):
+        try:
+            os.rename(old_file_path, new_file_path)
+        except Exception as e:
+            logger.error(f"Ошибка при перемещении файла {old_file_path}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Ошибка при перемещении файла {image.filename}: {str(e)}"
+            )
+    
+    # Обновляем путь обработки изображения
+    image.processed_path = issue_path
+    
+    # Обновляем данные изображения
+    image.issue_name = issue_name
+    image.issue_number = issue_number
+    
+    # Сохраняем изменения
+    db.commit()
+    db.refresh(image)
+    
+    logger.info(f"Пользователь {current_user.username} добавил изображение {image.filename} в выпуск {issue_name}_{issue_number} задачи {task_id}")
+    
+    return {
+        "message": "Изображение успешно добавлено в выпуск",
+        "new_path": new_file_path
+    }
+
+
 @router.post("/stage2/{task_id}/issue/{issue_id}/remove")
 async def remove_image_from_issue(
     task_id: int,
