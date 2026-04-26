@@ -65,6 +65,17 @@ class TaskService:
             validator_id=created_by.id,
             progress = 0,
             total_images = 0,
+            # Параметры первого этапа
+            feature_extractor_stage1=task_data.feature_extractor_stage1,
+            matcher_stage1=task_data.matcher_stage1,
+            quality_algorithm=task_data.quality_algorithm,
+            match_threshold_stage1=task_data.match_threshold_stage1,
+            duplicate_threshold_stage1=task_data.duplicate_threshold_stage1,
+            # Параметры второго этапа
+            feature_extractor_stage2=task_data.feature_extractor_stage2,
+            matcher_stage2=task_data.matcher_stage2,
+            duplicate_threshold_stage2=task_data.duplicate_threshold_stage2,
+            logos_path=task_data.logos_path
         )
         
         # Count total images in input directory

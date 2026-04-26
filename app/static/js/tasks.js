@@ -58,6 +58,49 @@ async function pauseProcessing(taskId) {
     }
 }
 
+async function saveGlobalSettings() {
+    // Находим форму и кнопку по ID и классам
+    const form = document.getElementById('taskSettingsForm');
+    const submitBtn = document.querySelector('#taskSettingsModal .btn-primary');
+    
+    if (!submitBtn) {
+        console.error('Кнопка сохранения не найдена');
+        return;
+    }
+    
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Сохранение...';
+    submitBtn.disabled = true;
+    
+    try {
+        const formData = new FormData(form);
+        
+        const response = await fetch('/tasks/settings', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            alert(data.message);
+            // Закрываем модальное окно
+            const modal = bootstrap.Modal.getInstance(document.getElementById('taskSettingsModal'));
+            if (modal) {
+                modal.hide();
+            }
+        } else {
+            alert('Ошибка: ' + (data.detail || 'Неизвестная ошибка'));
+        }
+    } catch (error) {
+        alert('Ошибка сети: ' + error.message);
+    } finally {
+        // Восстанавливаем состояние кнопки
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+    }
+}
+
 async function resumeProcessing(taskId) {
     if (!confirm('Возобновить обработку задачи?')) return;
     
@@ -77,6 +120,35 @@ async function resumeProcessing(taskId) {
         alert('Ошибка сети: ' + error.message);
     }
 }
+
+// Инициализация загрузки настроек по умолчанию при открытии модального окна
+$(document).ready(function() {
+    $('#taskSettingsModal').on('shown.bs.modal', async function() {
+        try {
+            const response = await fetch('/tasks/default_settings');
+            
+            if (response.ok) {
+                const settings = await response.json();
+                
+                // Заполняем поля формы значениями по умолчанию
+                $('#featureExtractorStage1').val(settings.feature_extractor_stage1 || 'SIFT');
+                $('#matcherStage1').val(settings.matcher_stage1 || 'FLANN');
+                $('#qualityAlgorithm').val(settings.quality_algorithm || 'BRISQUE');
+                $('#matchThresholdStage1').val(settings.match_threshold_stage1 !== null ? settings.match_threshold_stage1 : 0.75);
+                $('#duplicateThresholdStage1').val(settings.duplicate_threshold_stage1 !== null ? settings.duplicate_threshold_stage1 : 0.9);
+                
+                $('#featureExtractorStage2').val(settings.feature_extractor_stage2 || 'SIFT');
+                $('#matcherStage2').val(settings.matcher_stage2 || 'FLANN');
+                $('#duplicateThresholdStage2').val(settings.duplicate_threshold_stage2 !== null ? settings.duplicate_threshold_stage2 : 0.8);
+                $('#logosPath').val(settings.logos_path || '');
+            } else {
+                console.error('Failed to load default settings');
+            }
+        } catch (error) {
+            console.error('Error loading default settings:', error);
+        }
+    });
+});
 
 // Функция для обновления прогресса одной задачи
 async function updateTaskProgress(taskId) {

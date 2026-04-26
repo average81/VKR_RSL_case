@@ -110,6 +110,65 @@ async def get_tasks(request: Request, response: Response, current_user = Depends
     )
 
 
+@router.get("/default_settings", response_model=dict)
+async def get_default_settings(
+        request: Request,
+        current_user = Depends(get_current_user_optional),
+        db = Depends(get_db)
+):
+    """
+    Получение настроек по умолчанию
+    """
+    from sqlalchemy import text
+
+    # Проверяем наличие таблицы task_options, создаем если не существует
+    db.execute(text('''
+    CREATE TABLE IF NOT EXISTS task_options (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        feature_extractor_stage1 TEXT DEFAULT 'SIFT',
+        matcher_stage1 TEXT DEFAULT 'FLANN',
+        quality_algorithm TEXT DEFAULT 'BRISQUE',
+        match_threshold_stage1 REAL DEFAULT 0.75,
+        duplicate_threshold_stage1 REAL DEFAULT 0.9,
+        feature_extractor_stage2 TEXT DEFAULT 'SIFT',
+        matcher_stage2 TEXT DEFAULT 'FLANN',
+        duplicate_threshold_stage2 REAL DEFAULT 0.8,
+        logos_path TEXT
+    )
+    '''))
+
+    # Получаем настройки по умолчанию
+    result = db.execute(text('SELECT * FROM task_options LIMIT 1'))
+    row = result.fetchone()
+
+    if row is None:
+        # Возвращаем настройки по умолчанию, если в базе нет записей
+        if not current_user or not hasattr(current_user, 'is_group_leader') or not current_user.is_group_leader:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ разрешен только начальнику группы")
+
+        return {
+            "feature_extractor_stage1": "SIFT",
+            "matcher_stage1": "FLANN",
+            "quality_algorithm": "BRISQUE",
+            "match_threshold_stage1": 0.75,
+            "duplicate_threshold_stage1": 0.9,
+            "feature_extractor_stage2": "SIFT",
+            "matcher_stage2": "FLANN",
+            "duplicate_threshold_stage2": 0.8,
+            "logos_path": None
+        }
+
+    # Преобразуем результат в словарь
+    columns = result.keys()
+    default_settings = {col: row[i] for i, col in enumerate(columns)}
+
+    # Убираем id из ответа
+    if 'id' in default_settings:
+        del default_settings['id']
+
+    return default_settings
+
+
 @router.get("/{task_id}")
 async def get_task(request: Request, response: Response, task_id: int, current_user = Depends(get_current_user_optional), db = Depends(get_db)):
     """
@@ -279,18 +338,73 @@ async def create_task_form(
     Принимает поля формы и перенаправляет на /tasks после успешного создания.
     Output path генерируется автоматически в формате output/task_id/stage1 или output/task_id/stage2
     """
-    task_create = TaskCreate(
-        title=title,
-        description=description,
-        input_path=input_path,
-        stage=int(stage),
-        owner_id=owner_id,
-    )
+    task_create_data = {
+        "title": title,
+        "description": description,
+        "input_path": input_path,
+        "stage": int(stage),
+        "owner_id": owner_id,
+    }
+
+    # Получаем настройки по умолчанию из таблицы task_options
+    from sqlalchemy import text
+    try:
+        result = db.execute(text('SELECT * FROM task_options LIMIT 1'))
+        row = result.fetchone()
+
+        if row is None:
+            # Используем жестко заданные значения по умолчанию, если таблица пуста
+            default_options = {
+                'feature_extractor_stage1': 'SIFT',
+                'matcher_stage1': 'FLANN',
+                'quality_algorithm': 'BRISQUE',
+                'match_threshold_stage1': 0.75,
+                'duplicate_threshold_stage1': 0.9,
+                'feature_extractor_stage2': 'SIFT',
+                'matcher_stage2': 'FLANN',
+                'duplicate_threshold_stage2': 0.8,
+                'logos_path': None
+            }
+        else:
+            columns = result.keys()
+            default_options = {col: row[i] for i, col in enumerate(columns) if col != 'id'}
+    except Exception as e:
+        # В случае ошибки используем жестко заданные значения по умолчанию
+        print(f"Ошибка при получении настроек по умолчанию: {e}")
+        default_options = {
+            'feature_extractor_stage1': 'SIFT',
+            'matcher_stage1': 'FLANN',
+            'quality_algorithm': 'BRISQUE',
+            'match_threshold_stage1': 0.75,
+            'duplicate_threshold_stage1': 0.9,
+            'feature_extractor_stage2': 'SIFT',
+            'matcher_stage2': 'FLANN',
+            'duplicate_threshold_stage2': 0.8,
+            'logos_path': None
+        }
+
+    # Сначала обновляем данные задачи значениями по умолчанию
+    for key, value in default_options.items():
+        if key not in task_create_data or task_create_data[key] is None:
+            task_create_data[key] = value
+
+    # Сначала обновляем данные задачи значениями по умолчанию
+    for key, value in default_options.items():
+        if key not in task_create_data or task_create_data[key] is None:
+            task_create_data[key] = value
+
+    # Удаляем дублирующий код получения настроек по умолчанию
+    # Весь код выше (два блока try-except) был удален, так как дублировался
+
+    # Создаем объект TaskCreate с объединенными данными
+    task_create = TaskCreate(**task_create_data)
+    print(task_create)
+
 
     # Создаём задачу
     task_service = TaskService(db)
     task = task_service.create_task(current_user, task_create)
-
+    print(task)
     # Если выбран этап 2 (группировка по выпускам) и передан путь к логотипам, сохраняем его
     if int(stage) == 2 and logo_path:
         task.logos_path = logo_path
@@ -714,4 +828,76 @@ async def save_processing_settings(
     db.refresh(task)
     
     return {"message": "Настройки успешно сохранены"}
+
+
+
+@router.post("/settings")
+async def save_global_task_settings(
+    request: Request,
+    feature_extractor_stage1: str = Form("SIFT"),
+    matcher_stage1: str = Form("FLANN"),
+    quality_algorithm: str = Form("BRISQUE"),
+    match_threshold_stage1: float = Form(0.75),
+    duplicate_threshold_stage1: float = Form(0.9),
+    feature_extractor_stage2: str = Form("SIFT"),
+    matcher_stage2: str = Form("FLANN"),
+    duplicate_threshold_stage2: float = Form(0.8),
+    logos_path: str = Form(None),
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
+):
+    """
+    Сохранение глобальных настроек задач по умолчанию
+    """
+    # Check if user has permission to change settings (group leader or superuser)
+    if not hasattr(current_user, 'is_group_leader') or not current_user.is_group_leader:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ разрешен только начальнику группы")
+    
+    from sqlalchemy import text
+
+    # Проверяем наличие таблицы task_options, при необходимости создаем
+    db.execute(text('''
+    CREATE TABLE IF NOT EXISTS task_options (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        feature_extractor_stage1 TEXT DEFAULT 'SIFT',
+        matcher_stage1 TEXT DEFAULT 'FLANN',
+        quality_algorithm TEXT DEFAULT 'BRISQUE',
+        match_threshold_stage1 REAL DEFAULT 0.75,
+        duplicate_threshold_stage1 REAL DEFAULT 0.9,
+        feature_extractor_stage2 TEXT DEFAULT 'SIFT',
+        matcher_stage2 TEXT DEFAULT 'FLANN',
+        duplicate_threshold_stage2 REAL DEFAULT 0.8,
+        logos_path TEXT
+    )
+    '''))
+
+    # Удаляем существующие настройки по умолчанию
+    db.execute(text('DELETE FROM task_options'))
+    
+    # Сохраняем новые глобальные настройки
+    db.execute(text('''
+    INSERT INTO task_options (
+        feature_extractor_stage1, matcher_stage1, quality_algorithm,
+        match_threshold_stage1, duplicate_threshold_stage1,
+        feature_extractor_stage2, matcher_stage2, duplicate_threshold_stage2,
+        logos_path
+    ) VALUES (:feature_extractor_stage1, :matcher_stage1, :quality_algorithm,
+             :match_threshold_stage1, :duplicate_threshold_stage1,
+             :feature_extractor_stage2, :matcher_stage2, :duplicate_threshold_stage2,
+             :logos_path)
+    '''), {
+        'feature_extractor_stage1': feature_extractor_stage1,
+        'matcher_stage1': matcher_stage1,
+        'quality_algorithm': quality_algorithm,
+        'match_threshold_stage1': match_threshold_stage1,
+        'duplicate_threshold_stage1': duplicate_threshold_stage1,
+        'feature_extractor_stage2': feature_extractor_stage2,
+        'matcher_stage2': matcher_stage2,
+        'duplicate_threshold_stage2': duplicate_threshold_stage2,
+        'logos_path': logos_path
+    })
+    
+    db.commit()
+    
+    return {"message": "Глобальные настройки успешно сохранены"}
 

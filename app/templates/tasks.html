@@ -282,6 +282,103 @@ async function validateTask(taskId) {
     }
 }
 </script>
+
+<!-- Модальное окно настройки задачи -->
+<div class="modal fade" id="taskSettingsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Настройка параметров задачи</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="/tasks/settings" id="taskSettingsForm">
+                <div class="modal-body">
+                    <div class="row">
+                        <!-- Параметры первого этапа (поиск дубликатов) -->
+                        <div class="col-md-6">
+                            <h6>Параметры поиска дубликатов</h6>
+                            
+                            <div class="mb-3">
+                                <label for="featureExtractorStage1" class="form-label">Метод извлечения признаков</label>
+                                <select class="form-select" id="featureExtractorStage1" name="feature_extractor_stage1">
+                                    <option value="SIFT">SIFT</option>
+                                    <option value="KAZE">KAZE</option>
+                                    <option value="ORB">ORB</option>
+                                    <option value="AKAZE">AKAZE</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="matcherStage1" class="form-label">Метод сопоставления</label>
+                                <select class="form-select" id="matcherStage1" name="matcher_stage1">
+                                    <option value="FLANN">FLANN</option>
+                                    <option value="BF">Brute Force</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="qualityAlgorithm" class="form-label">Метод оценки качества</label>
+                                <select class="form-select" id="qualityAlgorithm" name="quality_algorithm">
+                                    <option value="BRISQUE">BRISQUE</option>
+
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="matchThresholdStage1" class="form-label">Порог сопоставления</label>
+                                <input type="number" class="form-control" id="matchThresholdStage1" name="match_threshold_stage1" step="0.01" min="0" max="1" value="0.75">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="duplicateThresholdStage1" class="form-label">Порог дубликатов</label>
+                                <input type="number" class="form-control" id="duplicateThresholdStage1" name="duplicate_threshold_stage1" step="0.01" min="0" max="1" value="0.9">
+                            </div>
+                        </div>
+                        
+                        <!-- Параметры второго этапа (группировка по выпускам) -->
+                        <div class="col-md-6">
+                            <h6>Параметры группировки по выпускам</h6>
+                            
+                            <div class="mb-3">
+                                <label for="featureExtractorStage2" class="form-label">Метод извлечения признаков</label>
+                                <select class="form-select" id="featureExtractorStage2" name="feature_extractor_stage2">
+                                    <option value="SIFT">SIFT</option>
+                                    <option value="KAZE">KAZE</option>
+                                    <option value="ORB">ORB</option>
+                                    <option value="AKAZE">AKAZE</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="matcherStage2" class="form-label">Метод сопоставления</label>
+                                <select class="form-select" id="matcherStage2" name="matcher_stage2">
+                                    <option value="FLANN">FLANN</option>
+                                    <option value="BF">Brute Force</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="duplicateThresholdStage2" class="form-label">Порог дубликатов</label>
+                                <input type="number" class="form-control" id="duplicateThresholdStage2" name="duplicate_threshold_stage2" step="0.01" min="0" max="1" value="0.8">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="logosPath" class="form-label">Путь к папке логотипов</label>
+                                <input type="text" class="form-control" id="logosPath" name="logos_path" placeholder="/path/to/logos">
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-primary" onclick="saveGlobalSettings()">Сохранить настройки</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 {% block scripts %}
 <script src="/static/js/tasks.js"></script>
 {% endblock %}
