@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from starlette.responses import RedirectResponse
 from typing import List, Dict, Any, Optional
 import os
+import shutil
 
 from pydantic import BaseModel
 
@@ -606,6 +607,71 @@ class ProcessingSettings(BaseModel):
     clustermatcher: str = "FLANN"
     cluster_threshold: float = 0.5
     clustermatchThreshold: float = 0.7
+
+@router.post("/{task_id}/download")
+async def download_task_results(
+    request: Request,
+    task_id: int,
+    current_user = Depends(get_current_user),
+    db = Depends(get_db),
+    destination_folder: str = Body(..., embed=True)
+):
+    """
+    Скачивание результатов задачи.
+    Копирует все изображения задачи с сохранением структуры папок в указанную директорию.
+    Доступно владельцу задачи или суперпользователю.
+    """
+    task_service = TaskService(db)
+    task = task_service.get_task_by_id(task_id, current_user)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    if not check_task_access(request, current_user, task):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    # Определяем исходную директорию в зависимости от этапа задачи
+    source_dir = None
+    if task.stage == 1:
+        source_dir = task.output_path
+    elif task.stage == 2:
+        source_dir = task.output_path_stage2
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid task stage")
+    
+    # Проверяем существование исходной директории
+    if not source_dir or not os.path.exists(source_dir):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Source directory not found")
+    
+    # Проверяем, что путь назначения не пустой
+    if not destination_folder:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Destination folder not specified")
+    
+    # Создаем папку назначения, если она не существует
+    try:
+        os.makedirs(destination_folder, exist_ok=True)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create destination directory: {str(e)}")
+    
+    # Формируем путь назначения с именем папки задачи
+    task_folder_name = f"task_{task_id}_stage{task.stage}"
+    final_destination = os.path.join(destination_folder, task_folder_name)
+    
+    # Копируем содержимое исходной директории в папку назначения
+    try:
+        if os.path.exists(final_destination):
+            shutil.rmtree(final_destination)
+        
+        shutil.copytree(source_dir, final_destination)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to copy files: {str(e)}")
+    
+    return {
+        "message": "Results downloaded successfully",
+        "source": source_dir,
+        "destination": final_destination,
+        "copied_files_count": sum([len(files) for r, d, files in os.walk(final_destination)])
+    }
+
 
 @router.post("/settings/{task_id}")
 async def save_processing_settings(

@@ -316,7 +316,86 @@ async function viewLogs(taskId) {
 }
 
 async function downloadResults(taskId) {
-    window.open(`/tasks/${taskId}/download`, '_blank');
+    // Создаем модальное окно для выбора папки назначения
+    const modalHtml = `
+        <div class="modal fade" id="downloadModal" tabindex="-1" aria-labelledby="downloadModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="downloadModalLabel">Скачать результаты</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="destinationFolder" class="form-label">Папка назначения</label>
+                            <input type="text" class="form-control" id="destinationFolder" placeholder="Введите путь к папке для сохранения результатов">
+                            <button type="button" class="btn btn-outline-secondary mt-2" onclick="selectDestinationFolder()">Выбрать папку</button>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="button" class="btn btn-primary" onclick="startDownload(${taskId})">Скачать</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Добавляем модальное окно в DOM
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Инициализируем модальное окно Bootstrap
+    const modalElement = document.getElementById('downloadModal');
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+
+    // Обработчик закрытия модального окна
+    modalElement.addEventListener('hidden.bs.modal', function () {
+        modalElement.remove();
+    });
+}
+
+// Функция для выбора папки назначения (заглушка)
+function selectDestinationFolder() {
+    alert('Функция выбора папки временно недоступна. Введите путь вручную.');
+}
+
+// Запускает процесс скачивания
+async function startDownload(taskId) {
+    const destinationFolderInput = document.getElementById('destinationFolder');
+    const destinationFolderPath = destinationFolderInput.value.trim();
+    
+    if (!destinationFolderPath) {
+        alert('Пожалуйста, укажите путь к папке назначения');
+        return;
+    }
+
+    // Отправляем данные через fetch
+    try {
+        const response = await fetch(`/tasks/${taskId}/download`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                destination_folder: destinationFolderPath
+            })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            alert('Результаты успешно скачаны: ' + data.message);
+        } else {
+            alert('Ошибка: ' + data.detail);
+        }
+    } catch (error) {
+        alert('Ошибка сети: ' + error.message);
+    }
+
+    // Закрываем модальное окно
+    const modalElement = document.getElementById('downloadModal');
+    const modal = bootstrap.Modal.getInstance(modalElement);
+    modal.hide();
 }
 
 async function refreshResults() {
