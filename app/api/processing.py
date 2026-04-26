@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import Dict, Any, List, Optional
 import logging
 from datetime import datetime
@@ -826,11 +827,15 @@ async def get_processing_stage2(
             # Создаем имя выпуска с номером
             issue_display_name = f"{issue_name}"
             
+            # Проверяем, все ли изображения в выпуске подтверждены
+            is_confirmed = all(img.validation_status == "user_validated" for img in issue_images)
+            
             issues.append({
                 "id": f"{issue_name}_{issue_number}",
                 "name": issue_display_name,
                 "number": issue_number,
-                "images": formatted_images
+                "images": formatted_images,
+                "confirmed": is_confirmed
             })
     
     # Определяем текущий выпуск (если есть)
@@ -964,7 +969,7 @@ async def add_image_to_issue(
     if task.output_path:
         # Используем выходную папку задачи как основу
         task_output_dir = os.path.dirname(task.output_path)
-        issue_path = os.path.join(task_output_dir, "stage2", "issues", f"{issue_name}_{issue_number}")
+        issue_path = os.path.join(task_output_dir, "stage2", f"{issue_name}",f"{issue_number}")
     else:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1007,6 +1012,95 @@ async def add_image_to_issue(
         "new_path": new_file_path
     }
 
+
+@router.post("/stage2/{task_id}/group/confirm")
+async def confirm_group_verification(
+    task_id: int,
+    issue_id: str = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Подтверждает проверку группы изображений.
+    
+    Args:
+        task_id: ID задачи
+        group_id: ID группы для подтверждения
+        issue_id: ID выпуска (опционально)
+        db: Сессия базы данных
+        current_user: Текущий пользователь
+    
+    Returns:
+        Сообщение об успешном подтверждении
+    """
+    # Проверяем существование задачи и доступ
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Задача не найдена"
+        )
+    
+    # Проверка доступа
+    if not validate_processing_access(task, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав для доступа к задаче"
+        )
+    
+    # Проверка статуса задачи
+    if task.status in ["completed"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Задача не должна быть в статусе 'completed'"
+        )
+    
+    # Проверка этапа
+    if task.stage != 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Этот обработчик предназначен только для этапа 2"
+        )
+    
+    # Проверяем наличие issue_id
+    if not issue_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Необходимо указать issue_id"
+        )
+
+    # Извлекаем название и номер выпуска из issue_id
+    try:
+        issue_name, issue_number_str = issue_id.rsplit('_', 1)
+        issue_number = int(issue_number_str)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неверный формат issue_id"
+        )
+
+    # Обновляем статус проверки только для изображений указанной группы и выпуска
+    images = db.query(Image).filter(
+        Image.task_id == task_id,
+        Image.issue_name == issue_name,
+        Image.issue_number == issue_number
+    ).all()
+
+    if not images:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Изображения для группы {issue_id} не найдены"
+        )
+
+    for image in images:
+        image.validation_status = "user_validated"
+        image.validated_by = current_user.id
+    
+    db.commit()
+    
+    logger.info(f"Пользователь {current_user.username} подтвердил проверку группы {issue_id} задачи {task_id}")
+    
+    return {"message": "Проверка группы успешно подтверждена"}
 
 @router.post("/stage2/{task_id}/issue/{issue_id}/remove")
 async def remove_image_from_issue(
@@ -1133,6 +1227,227 @@ async def remove_image_from_issue(
         "message": "Изображение успешно удалено из выпуска",
         "new_path": new_file_path
     }
+
+# Модель для тела запроса создания выпуска
+class CreateIssueRequest(BaseModel):
+    name: str
+    image_id: Optional[int] = None
+
+
+@router.post("/stage2/{task_id}/issue")
+async def create_issue(
+    task_id: int,
+    request: CreateIssueRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Создает новый выпуск для задачи и присваивает ему следующий номер.
+    Если указан image_id, перемещает изображение в новый выпуск.
+    
+    Args:
+        task_id: ID задачи
+        request: Данные с name и опциональным image_id
+        db: Сессия базы данных
+        current_user: Текущий пользователь
+    
+    Returns:
+        Данные созданного выпуска
+    """
+    # Проверяем существование задачи и доступ
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Задача не найдена"
+        )
+    
+    # Проверка доступа
+    if not validate_processing_access(task, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав для доступа к задаче"
+        )
+    
+    # Проверка статуса задачи
+    if task.status in ["completed"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Задача не должна быть в статусе 'completed'"
+        )
+    
+    # Проверка этапа
+    if task.stage != 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Этот обработчик предназначен только для этапа 2"
+        )
+    
+    # Проверяем имя выпуска
+    if not request.name or not request.name.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Имя выпуска не может быть пустым"
+        )
+    
+    issue_name = request.name.strip()
+    
+    # Находим максимальный номер выпуска с таким именем
+    max_issue_number = db.query(func.max(Image.issue_number)).filter(
+        Image.task_id == task_id,
+        Image.issue_name == issue_name
+    ).scalar() or 0
+    
+    # Следующий номер выпуска
+    issue_number = max_issue_number + 1
+    
+    # Формируем путь к папке выпуска
+    if task.output_path:
+        # Используем выходную папку задачи как основу
+        task_output_dir = os.path.dirname(task.output_path)
+        issue_path = os.path.join(task_output_dir, "stage2", f"{issue_name}",f"{issue_number}")
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не задан путь вывода для задачи"
+        )
+    
+    # Создаем папку выпуска
+    if not os.path.exists(issue_path):
+        os.makedirs(issue_path)
+    
+    # Если указано изображение, перемещаем его в новый выпуск
+    if request.image_id:
+        image = db.query(Image).filter(
+            Image.id == request.image_id,
+            Image.task_id == task_id
+        ).first()
+        
+        if not image:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Изображение не найдено"
+            )
+        
+        # Перемещаем файл изображения в папку выпуска
+        old_file_path = os.path.join(image.processed_path, image.filename)
+        new_file_path = os.path.join(issue_path, image.filename)
+        
+        if os.path.exists(old_file_path):
+            try:
+                os.rename(old_file_path, new_file_path)
+            except Exception as e:
+                logger.error(f"Ошибка при перемещении файла {old_file_path}: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Ошибка при перемещении файла {image.filename}: {str(e)}"
+                )
+        
+        # Обновляем путь обработки изображения
+        image.processed_path = issue_path
+        
+        # Обновляем данные изображения
+        image.issue_name = issue_name
+        image.issue_number = issue_number
+        
+        db.add(image)
+    
+    # Сохраняем изменения
+    db.commit()
+    
+    # Формируем ответ
+    response_data = {
+        "success": True,
+        "issue": {
+            "id": f"{issue_name}_{issue_number}",
+            "name": issue_name,
+            "number": issue_number,
+            "images_count": 1 if request.image_id else 0
+        }
+    }
+    
+    logger.info(f"Пользователь {current_user.username} создал выпуск {issue_name}_{issue_number} задачи {task_id}")
+    
+    return response_data
+
+
+@router.get("/stage2/{task_id}/issues")
+async def get_issues_list(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Возвращает список доступных групп с номерами выпусков для задачи.
+    
+    Args:
+        task_id: ID задачи
+        db: Сессия базы данных
+        current_user: Текущий пользователь
+    
+    Returns:
+        Список выпусков с их данными
+    """
+    # Проверяем существование задачи и доступ
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Задача не найдена"
+        )
+    
+    # Проверка доступа
+    if not validate_processing_access(task, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав для доступа к задаче"
+        )
+    
+    # Проверка статуса задачи
+    if task.status in ["completed"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Задача не должна быть в статусе 'completed'"
+        )
+    
+    # Проверка этапа
+    if task.stage != 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Этот обработчик предназначен только для этапа 2"
+        )
+    
+    # Получаем все уникальные комбинации названий и номеров выпусков из таблицы images
+    issue_combinations = db.query(Image.issue_name, Image.issue_number).filter(
+        Image.task_id == task_id,
+        Image.issue_name.isnot(None),
+        Image.issue_number.isnot(None)
+    ).distinct().all()
+    
+    # Формируем список выпусков
+    issues = []
+    for issue_name, issue_number in issue_combinations:
+        if issue_name:  # Проверяем, что имя не пустое
+            # Получаем все изображения для этой комбинации выпуска
+            issue_images = db.query(Image).filter(
+                Image.task_id == task_id,
+                Image.issue_name == issue_name,
+                Image.issue_number == issue_number
+            ).all()
+            
+            # Проверяем, все ли изображения в выпуске подтверждены
+            is_confirmed = all(img.validation_status == "user_validated" for img in issue_images)
+            
+            issues.append({
+                "id": f"{issue_name}_{issue_number}",
+                "name": issue_name,
+                "number": issue_number,
+                "images_count": len(issue_images),
+                "confirmed": is_confirmed
+            })
+    
+    return {"issues": issues}
+
 
 @router.post("/stage1/{task_id}/complete")
 async def complete_stage1(

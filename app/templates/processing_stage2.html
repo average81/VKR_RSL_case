@@ -8,6 +8,10 @@
         <h1>Этап 2: Кластеризация по выпускам</h1>
         <p class="text-muted">Задача: {{ task.title }}</p>
     </div>
+    <div>
+        <button class="btn btn-outline-secondary me-2" onclick="window.location.href='/tasks/{{ task.id }}'">Выйти</button>
+        <button class="btn btn-primary" onclick="completeTask()">Завершить</button>
+    </div>
 </div>
 
 <!-- Панель управления выпусками -->
@@ -25,7 +29,12 @@
                         <div>
                             <strong>{{ issue.name }}{% if issue.number %} - Выпуск {{ issue.number }}{% endif %}</strong>
                             <div class="small text-muted">{{ issue.images|length }} изображений</div>
+
                         </div>
+
+                        {% if issue.confirmed %}
+                        <span class="text-success"><i class="bi bi-check-circle-fill"></i></span>
+                        {% endif %}
                         <span class="badge bg-secondary rounded-pill">{{ issue.images|length }}</span>
                     </a>
                     {% endif %}
@@ -46,9 +55,12 @@
                         <div class="card-header">
                             <div class="d-flex justify-content-between align-items-center">
                                 <h6 class="mb-0">{{ current_issue.name }}{% if current_issue.number %} - Выпуск {{ current_issue.number }}{% endif %}</h6>
-                                <button class="btn btn-sm btn-outline-danger" onclick="deleteIssue({{ current_issue.id }})">
-                                    <i class="bi bi-trash"></i> Удалить
-                                </button>
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteIssue({{ current_issue.id }})">
+                                        <i class="bi bi-trash"></i> Удалить
+                                    </button>
+                                    <button class="btn btn-sm btn-primary" onclick="confirmGroupVerification()">Подтвердить</button>
+                                </div>
                             </div>
                         </div>
                         <div class="card-body">
@@ -62,7 +74,7 @@
                                             <small class="text-muted">{{ image.filename[:15] }}{% if image.filename|length > 15 %}...{% endif %}</small>
                                             <button class="btn btn-sm btn-outline-danger w-100 mt-1" 
                                                     onclick="removeFromIssue({{ image.id }}, '{{ current_issue.id }}')">
-                                                <i class="bi bi-x"></i>
+                                                <i class="bi bi-x"></i> Убрать
                                             </button>
                                         </div>
                                     </div>
@@ -107,6 +119,10 @@
                     <img src="/{{ image.path }}" class="card-img-top" alt="Изображение" style="height: 200px; object-fit: contain; background: #f8f9fa;">
                     <div class="card-body p-2">
                         <small class="text-muted">{{ image.filename }}</small>
+                        <button class="btn btn-sm btn-outline-primary w-100 mt-1" 
+                                onclick="moveToIssue({{ image.id }})">
+                            Перенести
+                        </button>
                     </div>
                 </div>
             </div>
@@ -117,15 +133,17 @@
         <div class="row mt-4">
             <div class="col-12">
                 <div class="d-flex justify-content-between align-items-center">
-
-                    <div class="btn-group" role="group">
-                        <button class="btn btn-outline-secondary" onclick="cancelProcessing()">Отмена</button>
-                        <button class="btn btn-success" onclick="completeProcessing()">Завершить этап</button>
-                    </div>
+                    
                 </div>
             </div>
         </div>
     </div>
+</div>
+
+<!-- Кнопки управления внизу страницы -->
+<div class="d-flex justify-content-between mt-4">
+    <button class="btn btn-outline-secondary" onclick="window.location.href='/tasks/{{ task.id }}'">Выйти</button>
+    <button class="btn btn-primary" onclick="completeTask()">Завершить</button>
 </div>
 
 <!-- Модальное окно создания выпуска -->
@@ -146,6 +164,27 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
                 <button type="button" class="btn btn-primary" onclick="createIssue()">Создать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно перемещения изображения -->
+<div class="modal fade" id="moveImageModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Перенести изображение</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Выберите группу для изображения:</p>
+                <div class="list-group mb-3" id="issueList">
+                    <!-- Список групп будет заполнен динамически -->
+                </div>
+                <button class="btn btn-outline-primary w-100" onclick="createNewIssueForImage()">
+                    <i class="bi bi-plus"></i> В новую группу
+                </button>
             </div>
         </div>
     </div>

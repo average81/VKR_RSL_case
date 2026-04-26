@@ -81,6 +81,54 @@ async function loadIssueContent(issueId) {
             if (currentIssueId) {
                 updateIssueBadge(currentIssueId);
             }
+            
+            // Добавляем кнопку "Подтвердить" к заголовку выпуска, если содержимое загружено
+            const issueHeader = document.querySelector('#issueContent .card-header .d-flex');
+            if (issueHeader && issueId) {
+                // Проверяем, есть ли уже группа кнопок с кнопкой подтверждения
+                let buttonGroup = issueHeader.querySelector('.btn-group');
+                if (!buttonGroup) {
+                    // Создаем группу кнопок
+                    buttonGroup = document.createElement('div');
+                    buttonGroup.className = 'btn-group';
+                    buttonGroup.role = 'group';
+                    
+                    // Кнопка удаления (сохраняем существующую или создаем новую)
+                    let deleteButton = issueHeader.querySelector('.btn-outline-danger') || document.querySelector(`[data-issue-id="${issueId}"]`).nextElementSibling;
+                    if (deleteButton) {
+                        deleteButton.classList.add('btn-sm');
+                    } else {
+                        deleteButton = document.createElement('button');
+                        deleteButton.className = 'btn btn-sm btn-outline-danger';
+                        deleteButton.innerHTML = '<i class="bi bi-trash"></i> Удалить';
+                        deleteButton.onclick = () => deleteIssue(issueId);
+                    }
+                    
+                    // Кнопка подтверждения
+                    const confirmButton = document.createElement('button');
+                    confirmButton.className = 'btn btn-sm btn-primary';
+                    confirmButton.textContent = 'Подтвердить';
+                    confirmButton.onclick = confirmGroupVerification;
+                    
+                    // Добавляем кнопки в группу
+                    buttonGroup.appendChild(deleteButton);
+                    buttonGroup.appendChild(confirmButton);
+                    
+                    // Добавляем группу кнопок в заголовок
+                    issueHeader.appendChild(buttonGroup);
+                } else {
+                    // Проверяем, есть ли уже кнопка подтверждения
+                    const confirmButton = buttonGroup.querySelector('.btn-primary');
+                    if (!confirmButton) {
+                        // Добавляем кнопку подтверждения в существующую группу
+                        const newConfirmButton = document.createElement('button');
+                        newConfirmButton.className = 'btn btn-sm btn-primary';
+                        newConfirmButton.textContent = 'Подтвердить';
+                        newConfirmButton.onclick = confirmGroupVerification;
+                        buttonGroup.appendChild(newConfirmButton);
+                    }
+                }
+            }
         }
     } catch (error) {
         console.error('Error loading issue content:', error);
@@ -103,6 +151,9 @@ async function addToIssue(imageId, issueId) {
         if (response.ok) {
             // Удаляем изображение из группы сопоставления
             document.querySelector(`[data-image-id="${imageId}"]`).closest('.col-6').remove();
+            
+            // Обновляем счётчик нераспределенных изображений
+            updateUnsortedCounter();
             
             // Обновляем содержимое выпуска
             if (issueId == currentIssueId) {
@@ -165,6 +216,10 @@ async function removeFromIssue(imageId, issueId) {
                     <img src="/${unsortedImagePath}" class="card-img-top" alt="Изображение" style="height: 200px; object-fit: contain; background: #f8f9fa;">
                     <div class="card-body p-2">
                         <small class="text-muted">${filename}</small>
+                        <button class="btn btn-sm btn-outline-primary w-100 mt-1" 
+                                onclick="moveToIssue(${imageId})">
+                            Перенести
+                        </button>
                     </div>
                 </div>
             `;
@@ -215,7 +270,7 @@ async function createIssue() {
             item.onclick = () => selectIssue(data.id);
             item.innerHTML = `
                 <div>
-                    <strong>${data.name}</strong>
+                    <strong>${data.name} - Выпуск ${data.number}</strong>
                     <div class="small text-muted">0 изображений</div>
                 </div>
                 <span class="badge bg-secondary rounded-pill">0</span>
@@ -386,7 +441,256 @@ async function completeProcessing() {
     }
 }
 
+// Подтверждение проверки группы
+async function confirmGroupVerification() {
+    if (!confirm('Подтвердить проверку текущей группы?')) return;
+    
+    try {
+        let url = `/processing/stage2/${taskId}/group/confirm`;
+        if (currentIssueId) {
+            url += `?issue_id=${currentIssueId}`;
+        }
+        const response = await fetch(url, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            alert('Проверка группы подтверждена!');
+            // Navigate to next group
+            navigateGroup('next');
+        } else {
+            const data = await response.json();
+            alert('Ошибка: ' + data.detail);
+        }
+    } catch (error) {
+        alert('Ошибка сети: ' + error.message);
+    }
+}
+
+// Завершение задачи
+async function completeTask() {
+    if (!confirm('Завершить выполнение задачи?')) return;
+
+    try {
+        const response = await fetch(`/tasks/${taskId}/user_complete`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            alert('Задача успешно завершена!');
+            window.location.href = `/tasks/${taskId}`;
+        } else {
+            const data = await response.json();
+            alert('Ошибка: ' + data.detail);
+        }
+    } catch (error) {
+        alert('Ошибка сети: ' + error.message);
+    }
+}
+
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     initDragAndDrop();
 });
+
+/**
+ * Открывает модальное окно для выбора группы при перемещении изображения
+ * @param {number} imageId - ID изображения, которое нужно переместить
+ */
+function moveToIssue(imageId) {
+    // Сохраняем ID изображения в глобальной переменной
+    window.currentMovingImageId = imageId;
+    
+    // Очищаем предыдущий список
+    const issueList = document.getElementById('issueList');
+    issueList.innerHTML = '';
+    
+    // Получаем список выпусков из уже загруженных данных или через API
+    // Используем уже загруженные данные из шаблона, если доступны
+    if (typeof issues !== 'undefined' && issues.length > 0) {
+        // Фильтруем выпуски, исключая 'unsorted'
+        const filteredIssues = issues.filter(issue => issue.name !== 'unsorted');
+        
+        if (filteredIssues.length > 0) {
+            filteredIssues.forEach(issue => {
+                const button = document.createElement('button');
+                button.className = 'list-group-item list-group-item-action';
+                button.type = 'button';
+                
+                // Определяем количество изображений в выпуске
+                const imageCount = issue.images ? issue.images.length : 0;
+                
+                button.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>${issue.name}</strong>
+                            ${issue.number ? `<div class="small text-muted">Выпуск ${issue.number}</div>` : ''}
+                        </div>
+                        <span class="badge bg-secondary rounded-pill">${imageCount}</span>
+                    </div>
+                `;
+                button.onclick = () => moveImageToIssue(imageId, issue.id);
+                issueList.appendChild(button);
+            });
+        } else {
+            const item = document.createElement('div');
+            item.className = 'list-group-item text-center text-muted';
+            item.textContent = 'Нет созданных групп';
+            issueList.appendChild(item);
+        }
+    } else {
+        // Если данные не доступны, загружаем через API
+        fetch(`/processing/stage2/${taskId}/issues`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.issues && data.issues.length > 0) {
+                    data.issues.forEach(issue => {
+                        if (issue.name === 'unsorted') return;
+                        
+                        const button = document.createElement('button');
+                        button.className = 'list-group-item list-group-item-action';
+                        button.type = 'button';
+                        
+                        button.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${issue.name}</strong>
+                                    ${issue.number ? `<div class="small text-muted">Выпуск ${issue.number}</div>` : ''}
+                                </div>
+                                <span class="badge bg-secondary rounded-pill">${issue.images_count || 0}</span>
+                            </div>
+                        `;
+                        button.onclick = () => moveImageToIssue(imageId, issue.id);
+                        issueList.appendChild(button);
+                    });
+                } else {
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item text-center text-muted';
+                    item.textContent = 'Нет созданных групп';
+                    issueList.appendChild(item);
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка при загрузке списка выпусков:', error);
+                const item = document.createElement('div');
+                item.className = 'list-group-item text-center text-danger';
+                item.textContent = 'Ошибка загрузки групп';
+                issueList.appendChild(item);
+            });
+    }
+
+    // Показываем модальное окно
+    const modal = new bootstrap.Modal(document.getElementById('moveImageModal'));
+    modal.show();
+}
+
+/**
+ * Перемещает изображение в выбранную группу
+ * @param {number} imageId - ID изображения
+ * @param {number} issueId - ID группы
+ */
+function moveImageToIssue(imageId, issueId) {
+    // Используем существующий механизм добавления изображения в выпуск
+    addToIssue(imageId, issueId);
+    
+    // Закрываем модальное окно
+    const modal = bootstrap.Modal.getInstance(document.getElementById('moveImageModal'));
+    if (modal) {
+        modal.hide();
+    }
+}
+
+/**
+ * Создает новую группу для изображения
+ */
+function createNewIssueForImage() {
+    // Сначала закрываем текущее модальное окно
+    const modal = bootstrap.Modal.getInstance(document.getElementById('moveImageModal'));
+    if (modal) {
+        modal.hide();
+    }
+    
+    // Показываем модальное окно создания выпуска
+    const createModal = new bootstrap.Modal(document.getElementById('createIssueModal'));
+    createModal.show();
+    
+    // Сохраняем ID изображения для последующего перемещения после создания выпуска
+    window.imageForNewIssue = window.currentMovingImageId;
+}
+
+// Модифицируем функцию createIssue, чтобы она могла обрабатывать создание выпуска для конкретного изображения
+const originalCreateIssue = createIssue;
+window.createIssue = function() {
+    const issueName = document.getElementById('issueName').value.trim();
+    
+    if (!issueName) {
+        alert('Введите название выпуска');
+        return;
+    }
+    
+    // Подготавливаем данные для запроса
+    const requestData = {
+        name: issueName
+    };
+    
+    // Если есть изображение для перемещения, добавляем его в запрос
+    if (window.imageForNewIssue) {
+        requestData.image_id = window.imageForNewIssue;
+    }
+    
+    fetch(`/processing/stage2/${taskId}/issue`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Добавляем новый выпуск в список
+            const listGroup = document.querySelector('.list-group');
+            const item = document.createElement('a');
+            item.href = '#';
+            item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center issue-item';
+            // ID выпуска теперь в data.issue.id
+            item.dataset.issueId = data.issue.id;
+            item.onclick = () => selectIssue(data.issue.id);
+            item.innerHTML = `
+                <div>
+                    <strong>${data.issue.name} - Выпуск ${data.issue.number}</strong>
+                    <div class="small text-muted">${data.issue.images_count} изображений</div>
+                </div>
+                <span class="badge bg-secondary rounded-pill">${data.issue.images_count}</span>
+            `;
+            listGroup.appendChild(item);
+            
+            // Закрываем модальное окно
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createIssueModal'));
+            modal.hide();
+            
+            // Очищаем поле ввода
+            document.getElementById('issueName').value = '';
+            
+            // Очищаем переменную с изображением
+            if (window.imageForNewIssue) {
+                delete window.imageForNewIssue;
+            }
+            
+            // Выбираем новый выпуск
+            selectIssue(data.issue.id);
+            
+            // Обновляем счётчик нераспределенных изображений, если было перемещено изображение
+            if (window.imageForNewIssue) {
+                updateUnsortedCounter();
+                delete window.imageForNewIssue;
+            }
+        } else {
+            alert('Ошибка при создании выпуска: ' + data.detail);
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка при создании выпуска:', error);
+        alert('Произошла ошибка при создании выпуска');
+    });
+}
