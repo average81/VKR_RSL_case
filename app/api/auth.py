@@ -7,18 +7,15 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from starlette.responses import RedirectResponse
-import os
 
-from app import database, models
+from app import models
 from app.database import get_db
 from app.models.user import UserBase, UserSchema, UserCreate
 from app.models.task import Task
 from app.models.enums import  TaskStatus
-from app.models.image import Image
-from app.models import User
 from app.settings import settings
 from app.main import templates
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import HTTPBearer
 from typing import Dict, Optional
 
 # Опциональная зависимость для получения пользователя без ошибки 401

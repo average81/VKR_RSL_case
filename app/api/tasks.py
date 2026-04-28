@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response, Form, Body
 from starlette.responses import RedirectResponse
-from typing import List, Dict, Any, Optional
+from typing import  Dict, Any
 import os
 import shutil
 
 from pydantic import BaseModel
 
 from app.api.auth import get_current_user, get_current_user_optional, check_group_leader, check_task_access
-from app.models.task import Task, TaskCreate, TaskSchema
+from app.models.task import TaskCreate, TaskSchema
 from app.models.enums import TaskType
 from app.models.user import User
 from app.models.image import Image
@@ -15,7 +15,6 @@ from app.services.task_service import TaskService
 from app.database import get_db
 from app.main import templates
 from utils.utils import open_dataset
-import asyncio
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 

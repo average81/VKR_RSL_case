@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import os
 import shutil
@@ -7,9 +7,7 @@ from app import models
 from app.database import get_db, SQLALCHEMY_DATABASE_URL
 from app.api.auth import get_current_active_user
 from app.models.image import  ImageValidation, ImageMove
-import asyncio
 
-import re
 from datetime import datetime
 
 router = APIRouter(prefix="/images")
