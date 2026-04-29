@@ -46,14 +46,6 @@
 - `GET /images/task/{task_id}` - получение изображений задачи
 - `GET /images/progress/{task_id}` - получение прогресса обработки
 
-### Кластеризация по выпускам
-- `POST /grouping/{task_id}/start` - запуск кластеризации по выпускам
-
-### Двухэтапная обработка
-- `POST /processing/{task_id}/start` - запуск двухэтапной обработки
-- `GET /processing/{task_id}/status` - получение статуса обработки
-- `POST /processing/{task_id}/cancel` - отмена обработки
-
 ### Валидация результатов
 - `POST /images/{image_id}/validate` - валидация изображения
 - `POST /images/task/{task_id}/validate-all` - массовая валидация всех изображений

@@ -127,11 +127,6 @@ def get_current_active_user(request: Request, current_user: models.User = Depend
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
-def get_current_superuser(request: Request, current_user: models.User = Depends(get_current_active_user)):
-    if not current_user.is_superuser:
-        raise HTTPException(status_code=400, detail="The user doesn't have enough privileges")
-    return current_user
-
 
 def check_group_leader(request: Request, current_user: models.User = Depends(get_current_active_user)):
     if not hasattr(current_user, 'is_group_leader') or not current_user.is_group_leader:

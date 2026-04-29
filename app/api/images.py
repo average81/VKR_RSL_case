@@ -92,7 +92,7 @@ def validate_image(
     image.is_validated = True
     image.validation_result = validation_data.validation_result
     image.validated_by = current_user.id
-    image.validated_at = datetime.utcnow()
+    image.validated_at = datetime.now()
     
     db.commit()
     db.refresh(image)
@@ -123,7 +123,7 @@ def validate_all_images(
     db.query(models.Image).filter(models.Image.task_id == task_id).update({
         models.Image.is_validated: True,
         models.Image.validated_by: current_user.id,
-        models.Image.validated_at: datetime.utcnow()
+        models.Image.validated_at: datetime.now()
     })
     
     db.commit()
