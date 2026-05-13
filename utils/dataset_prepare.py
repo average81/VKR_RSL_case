@@ -21,7 +21,12 @@ def blur_image(img, blur_prob = 0.2):
             if random.random() >= blur_prob:
                 break
             kernel_size += 2
-    return img
+        # Применяем размытие
+        if kernel_size != 1:
+            img_blurred = cv2.blur(src=img,ksize=(kernel_size , kernel_size))
+        else:
+            img_blurred = img
+    return img_blurred
 
 #Функция добавления шумов
 def noise_image(img, noise_prob = 0.2):

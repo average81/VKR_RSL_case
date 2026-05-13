@@ -1,8 +1,11 @@
 import cv2
 import numpy as np
+import torch
 from multiprocessing import Pool, cpu_count
 import multiprocessing
 from functools import partial
+import kornia
+import kornia
 
 class BFMatcher:
     def __init__(self, feature_extractor="SIFT"):
@@ -99,147 +102,119 @@ class SymmetricMatcher():
         hamming_dist = np.count_nonzero(xor_result)
         return hamming_dist
     
-    def find_nearest_neighbor(self, descriptor, descriptors):
-        """Находит ближайшего соседа для заданного дескриптора."""
-        if len(descriptors) == 0:
-            return -1, float('inf')
-        
-        # Векторизованное вычисление расстояний
-        distances = np.array([self.calc_distance(descriptor, desc) for desc in descriptors])
-        nearest_idx = np.argmin(distances)
-        min_dist = distances[nearest_idx]
-        return nearest_idx, min_dist
-    
-    def is_mutual_nearest_neighbor(self, idx1, idx2, descriptors1, descriptors2):
+    def match(self, kp1, desc1, kp2, desc2, threshold=0.95):
         """
-        Проверяет, являются ли две точки взаимно ближайшими соседями.
-        """
-        if idx1 >= len(descriptors1) or idx2 >= len(descriptors2):
-            return False
-            
-        # Получаем дескрипторы
-        desc1 = descriptors1[idx1]
-        desc2 = descriptors2[idx2]
-        
-        # Векторизованное вычисление расстояний
-        dists1_to_2 = np.array([self.calc_distance(desc1, desc) for desc in descriptors2])
-        dists2_to_1 = np.array([self.calc_distance(desc2, desc) for desc in descriptors1])
-        
-        # Проверяем взаимность
-        nn2_idx = np.argmin(dists1_to_2)
-        nn1_idx = np.argmin(dists2_to_1)
-        
-        return nn2_idx == idx2 and nn1_idx == idx1
-    
-    def match(self, kp1, desc1, kp2, desc2, threshold=0.75):
-        """
-        Выполняет симметричное взаимнооднозначное сопоставление ключевых точек.
+        Выполняет симметричное взаимнооднозначное сопоставление ключевых точек
+        с использованием kornia.feature.match_smnn.
         
         Возвращает:
         - matchesMask: маска совпадений
         - good_matches: список хороших матчей
-        - oos: множество пар взаимно ближайших соседей
         """
         if desc1 is None or desc2 is None or len(desc1) == 0 or len(desc2) == 0:
-            return None, [], []
+            return None, []
             
-        oos = []  # Множество пар взаимно ближайших соседей
+        # Преобразуем дескрипторы в тензоры PyTorch
+        desc1_np = np.array(desc1)
+        desc2_np = np.array(desc2)
         
-        # Преобразуем дескрипторы в numpy массивы
-        desc1_array = np.array(desc1)
-        desc2_array = np.array(desc2)
-        
-        # Оптимизация по памяти: обработка по блокам
-        block_size = 500  # Размер блока для обработки
-        n1, n2 = len(desc1), len(desc2)
-        
-        # Предварительная инициализация для поиска ближайших соседей
-        nn2_indices = np.zeros(n1, dtype=int)
-        nn1_distances = np.full(n2, np.inf)
-        nn1_indices = np.zeros(n2, dtype=int)
-        
-        # Обработка по блокам для поиска ближайших соседей из второго изображения
-        for i in range(0, n1, block_size):
-            end_i = min(i + block_size, n1)
-            block1 = desc1_array[i:end_i]
-            
-            if self.feature_extractor in ("SIFT", "KAZE", "AKAZE"):
-                # Euclidean расстояние
-                block_distances = np.linalg.norm(block1[:, np.newaxis] - desc2_array, axis=2)
+        # Проверяем и корректируем форму данных в соответствии с ожидаемым форматом (B, D)
+        if desc1_np.ndim == 1:
+            # Одномерный массив - считаем его как B векторов размерности 1
+            if desc1_np.size == 1:
+                desc1_np = desc1_np.reshape(-1, 1)  # (1, 1)
             else:
-                # Hamming расстояние
-                if desc1_array.dtype != np.uint8:
-                    block1 = (block1 > 0).astype(np.uint8)
-                if desc2_array.dtype != np.uint8:
-                    desc2_array_local = (desc2_array > 0).astype(np.uint8)
+                # Для дескрипторов вроде SIFT, ORB - считаем что это N векторов размерности D
+                # Определяем размерность D как 128 для SIFT, 32 для ORB, иначе 64
+                if self.feature_extractor == "SIFT":
+                    D = 128
+                elif self.feature_extractor == "ORB":
+                    D = 32
                 else:
-                    desc2_array_local = desc2_array
-                xor_block = block1[:, np.newaxis] ^ desc2_array_local
-                block_distances = np.count_nonzero(xor_block, axis=2)
-            
-            # Находим ближайших соседей в блоке
-            block_nn2 = np.argmin(block_distances, axis=1)
-            nn2_indices[i:end_i] = block_nn2
-            
-            # Обновляем ближайших соседей из первого изображения
-            for j in range(n2):
-                col_distances = block_distances[:, j]
-                col_indices = np.argmin(col_distances)
-                if col_distances[col_indices] < nn1_distances[j]:
-                    nn1_distances[j] = col_distances[col_indices]
-                    nn1_indices[j] = col_indices + i  # Смещение индекса
-        
-        # Параллельная проверка взаимности для всех пар
-        def check_mutual_nn(i):
-            j = nn2_indices[i]
-            if nn1_indices[j] != i:  # Нет взаимности
-                return None
-                
-            # Находим второе минимальное расстояние (кроме текущего)
-            if self.feature_extractor in ("SIFT", "KAZE", "AKAZE"):
-                # Для Euclidean расстояния используем broadcasting
-                dist_i = np.linalg.norm(desc1_array[i] - desc2_array, axis=1)
-            else:
-                # Для Hamming расстояния используем broadcasting
-                d1 = desc1_array[i]
-                if d1.dtype != np.uint8:
-                    d1 = (d1 > 0).astype(np.uint8)
-                if desc2_array.dtype != np.uint8:
-                    d2_array = (desc2_array > 0).astype(np.uint8)
+                    D = 64
+                    
+                # Если размер кратен D, считаем что это N x D
+                if desc1_np.size % D == 0:
+                    desc1_np = desc1_np.reshape(-1, D)
                 else:
-                    d2_array = desc2_array
-                # Вычисляем XOR для всех дескрипторов
-                xor_result = d1 ^ d2_array
-                # Считаем количество единиц для каждого дескриптора
-                dist_i = np.count_nonzero(xor_result, axis=1)
-            
-            # Удаляем текущее расстояние и находим второе минимальное
-            dist_i_without_j = np.delete(dist_i, j)
-            if len(dist_i_without_j) > 0:
-                second_min_dist = np.min(dist_i_without_j)
-                if dist_i[j] < threshold * second_min_dist:
-                    return (i, j)
-            return None
+                    # Иначе считаем что это N векторов размерности 1
+                    desc1_np = desc1_np.reshape(-1, 1)
+                    
+        elif desc1_np.ndim == 2:
+            # Двумерный массив
+            if desc1_np.shape[0] == 1 and desc1_np.shape[1] > 1:
+                # Одна строка - транспонируем для получения (N, D)
+                desc1_np = desc1_np.T
 
-        # Используем multiprocessing для параллельной обработки
-        num_processes = min(cpu_count(), 4)  # Ограничиваем количество процессов
-        with Pool(processes=num_processes) as pool:
-            results = pool.map(check_mutual_nn, range(n1))
+        if desc2_np.ndim == 1:
+            # Одномерный массив - аналогично
+            if desc2_np.size == 1:
+                desc2_np = desc2_np.reshape(-1, 1)
+            else:
+                if self.feature_extractor == "SIFT":
+                    D = 128
+                elif self.feature_extractor == "ORB":
+                    D = 32
+                else:
+                    D = 64
+                    
+                if desc2_np.size % D == 0:
+                    desc2_np = desc2_np.reshape(-1, D)
+                else:
+                    desc2_np = desc2_np.reshape(-1, 1)
+                    
+        elif desc2_np.ndim == 2:
+            if desc2_np.shape[0] == 1 and desc2_np.shape[1] > 1:
+                desc2_np = desc2_np.T
+
+        # Преобразуем в тензоры
+        desc1_t = torch.from_numpy(desc1_np).float()
+        desc2_t = torch.from_numpy(desc2_np).float()
+        
+        # Перемещаем тензоры на GPU, если доступен
+        if torch.cuda.is_available():
+            desc1_t = desc1_t.cuda()
+            desc2_t = desc2_t.cuda()
+        
+        # Используем kornia для сопоставления симметричных ближайших соседей
+        try:
+            matches = kornia.feature.match_smnn(desc1_t, desc2_t, threshold)
             
-        # Собираем результаты
-        oos = [result for result in results if result is not None]
-    
-        # Формируем результат в формате, совместимом с существующим кодом
+            # Проверяем результат согласно документации
+            # match_smnn возвращает кортеж (distances, indices)
+            if not isinstance(matches, tuple) or len(matches) != 2:
+                return None, []
+                
+            distances, indices = matches
+            
+            # Проверяем, что indices имеет форму (B3, 2)
+            if not torch.is_tensor(indices) or indices.ndim != 2 or indices.shape[1] != 2:
+                return None, []
+                
+            # Перемещаем индексы обратно на CPU и преобразуем в numpy массив
+            matches_indices = indices.cpu().numpy()
+            
+            # Очистка памяти GPU
+            del desc1_t, desc2_t, distances, indices
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception as e:
+            print(f"Kornia matching error: {e}")
+            return None, []
+        
+        # Формируем список совпадений в формате OpenCV
         good_matches = []
-        for i, j in oos:
-            # Создаем объект, имитирующий match от OpenCV
-            match = type('Match', (), {
-                'queryIdx': i,
-                'trainIdx': j,
-                'distance': self.calc_distance(desc1[i], desc2[j])
-            })()
-            good_matches.append(match)
-    
+        for idx1, idx2 in matches_indices:
+            # Проверяем валидность индексов
+            idx1, idx2 = int(idx1), int(idx2)
+            if 0 <= idx1 < len(desc1) and 0 <= idx2 < len(desc2):
+                match = type('Match', (), {
+                    'queryIdx': idx1,
+                    'trainIdx': idx2,
+                    'distance': float(self.calc_distance(desc1[idx1], desc2[idx2]))
+                })()
+                good_matches.append(match)
+        
         # Генерируем маску для RANSAC
         matchesMask = None
         if len(good_matches) > 5:
@@ -247,5 +222,5 @@ class SymmetricMatcher():
             dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
             M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
             matchesMask = mask.ravel().tolist()
-    
+        
         return matchesMask, good_matches

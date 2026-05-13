@@ -175,7 +175,7 @@ def process_images_task(
                 continue
 
             # Предварительная обработка
-            #img = preprocess_image(img)
+            img = preprocess_image(img)
 
             if last_img is not None:
                 if Dprocessor.last_kp is None:

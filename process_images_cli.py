@@ -12,6 +12,7 @@ from processor.duplicates_processor import DuplicatesProcessor, matchers, extrac
 import cv2
 import re
 import time
+from processor.preprocess import preprocess_image
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +136,7 @@ if __name__ == "__main__":
     num_duplicates = 0
     for i in input_images.index:
         img = cv2.imread(args.input_dir + "/" + input_images.loc[i, 'filename'])
+        img = preprocess_image(img)
         if Dprocessor.last_kp is None:
             t0 = time.time()
             score = Dprocessor.compare(last_img,img, config["match_threshold"])
