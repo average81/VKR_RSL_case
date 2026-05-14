@@ -9,6 +9,8 @@ from processor.duplicates_processor import DuplicatesProcessor
 import utils.utils as utils
 from tqdm import tqdm
 import pandas as pd
+from processor.preprocess import preprocess_image
+import shutil
 
 default_config = {
     "db_path": "processed_images.db",
@@ -100,7 +102,7 @@ def main(input_folder, output_folder, logos_folder, config, save_metrics=False, 
                         file_bytes = f.read()
                     np_arr = np.frombuffer(file_bytes, np.uint8)
                     logo_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
+                    #logo_img = preprocess_image(logo_img)
                     if logo_img is None:
                         logging.error(f"Не удалось декодировать логотип: {logo_path}")
                         continue
@@ -136,7 +138,7 @@ def main(input_folder, output_folder, logos_folder, config, save_metrics=False, 
                     file_bytes = f.read()
                 np_arr = np.frombuffer(file_bytes, np.uint8)
                 input_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-                
+                #input_img = preprocess_image(input_img)
                 if input_img is None:
                     logging.error(f"Не удалось декодировать изображение: {input_img_path}")
                     continue
@@ -199,16 +201,8 @@ def main(input_folder, output_folder, logos_folder, config, save_metrics=False, 
 
             # Копируем изображение в текущую группу
             output_img_path = os.path.join(group_folder_path, input_img_name)
-            # Сохранение изображения с поддержкой кириллицы
-            try:
-                success, encoded_img = cv2.imencode('.png', input_img)
-                if success:
-                    with open(output_img_path, 'wb') as f:
-                        f.write(encoded_img)
-                else:
-                    logging.error(f"Не удалось закодировать изображение для сохранения: {output_img_path}")
-            except Exception as e:
-                logging.error(f"Ошибка при сохранении изображения {output_img_path}: {e}")
+            # Копируем в выходную папку
+            shutil.copy2(input_img_path,output_img_path)
             
             logging.info(
                 f"{input_img_name}, Логотип '{best_logo_name}' ({round(max_similarity * 100, 4):>6}%)"
@@ -219,16 +213,8 @@ def main(input_folder, output_folder, logos_folder, config, save_metrics=False, 
         # Если мы не в группе - пропускаем изображение
         if max_similarity < similarity_threshold and current_group is not None:
             output_img_path = os.path.join(group_folder_path, input_img_name)
-            # Сохранение изображения с поддержкой кириллицы
-            try:
-                success, encoded_img = cv2.imencode('.png', input_img)
-                if success:
-                    with open(output_img_path, 'wb') as f:
-                        f.write(encoded_img)
-                else:
-                    logging.error(f"Не удалось закодировать изображение для сохранения: {output_img_path}")
-            except Exception as e:
-                logging.error(f"Ошибка при сохранении изображения {output_img_path}: {e}")
+            # Копируем в выходную папку
+            shutil.copy2(input_img_path,output_img_path)
             logging.info(f"  -> {input_img_name} (продолжение группы), наиболее близкое: {best_folder_name}/{best_logo_name}, схожесть: {max_similarity:.3f}")
         else:
             logging.info(f"  -> {input_img_name} (вне группы), наиболее близкое: {best_logo_name}, схожесть: {max_similarity:.3f}")
