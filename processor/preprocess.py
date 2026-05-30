@@ -19,3 +19,19 @@ def preprocess_image(img):
     img = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX)
 
     return img
+
+def preprocess_image2(img):
+    if img is None:
+        return None
+
+
+    # Преобразование в оттенки серого, если цветное
+    if len(img.shape) == 3:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Удаление шума
+    img = cv2.GaussianBlur(img, (9, 9), 0)
+
+    # Нормализация
+    img = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX)
+
+    return img

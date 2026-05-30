@@ -5,11 +5,15 @@ import yaml
 import logging
 import numpy as np
 import re
+import torch
+
+# Set PyTorch CUDA memory management to avoid fragmentation
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 from processor.duplicates_processor import DuplicatesProcessor
 import utils.utils as utils
 from tqdm import tqdm
 import pandas as pd
-from processor.preprocess import preprocess_image
+from processor.preprocess import preprocess_image,preprocess_image2
 import shutil
 
 default_config = {
@@ -102,7 +106,7 @@ def main(input_folder, output_folder, logos_folder, config, save_metrics=False, 
                         file_bytes = f.read()
                     np_arr = np.frombuffer(file_bytes, np.uint8)
                     logo_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-                    #logo_img = preprocess_image(logo_img)
+                    logo_img = preprocess_image2(logo_img)
                     if logo_img is None:
                         logging.error(f"Не удалось декодировать логотип: {logo_path}")
                         continue
@@ -138,7 +142,15 @@ def main(input_folder, output_folder, logos_folder, config, save_metrics=False, 
                     file_bytes = f.read()
                 np_arr = np.frombuffer(file_bytes, np.uint8)
                 input_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-                #input_img = preprocess_image(input_img)
+                input_img = preprocess_image2(input_img)
+                """# Уменьшаем изображение до максимального размера 3000x3000 с сохранением пропорций
+                h, w = input_img.shape[:2]
+                max_size = 3000
+                if h > max_size or w > max_size:
+                    scale = max_size / max(h, w)
+                    new_w = int(w * scale)
+                    new_h = int(h * scale)
+                    input_img = cv2.resize(input_img, (new_w, new_h), interpolation=cv2.INTER_AREA)"""
                 if input_img is None:
                     logging.error(f"Не удалось декодировать изображение: {input_img_path}")
                     continue
@@ -148,7 +160,9 @@ def main(input_folder, output_folder, logos_folder, config, save_metrics=False, 
         except Exception as e:
             logging.error(f"Ошибка при чтении изображения {input_img_path}: {e}")
             continue
-        
+        kp2, des2 = (None,None)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         # Извлекаем признаки из изображения
         kp2, des2 = processor.feature_extractor.extract_features(input_img)
         max_similarity = 0

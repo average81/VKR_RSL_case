@@ -6,6 +6,9 @@ import utils.utils as utils
 import os
 import shutil
 import pandas as pd
+
+# Set PyTorch CUDA memory management to avoid fragmentation
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 from repository.sql_repository import SQLProcessedRepository, Processed_table, create_sqlengine
 import datetime
 from processor.duplicates_processor import DuplicatesProcessor, matchers, extractors

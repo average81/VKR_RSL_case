@@ -1,8 +1,10 @@
-from visualize import draw_roc_curve
+from visualize import draw_roc_curve, draw_confusion_matrix_heatmap
 import utils
 import argparse
 import pandas as pd
 import numpy as np
+from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
 
 def get_true_group_name(image_file, mapping_df):
     """
@@ -118,3 +120,33 @@ if __name__ == '__main__':
     print(f'Recall at optimal threshold: {recall[optimal_idx]:.4f}')
     print(f'Accuracy at optimal threshold: {accuracy[optimal_idx]:.4f}')
     print(f'ROC AUC: {roc_auc:.4f}')
+
+    # Определяем уникальные названия групп из mapping_df и предсказанных значений
+    unique_true_groups = sorted(mapping_df['name'].unique())
+    unique_predicted_groups = sorted(metrics_df['название логотипа'].apply(get_predicted_group_name).unique())
+    all_groups = sorted(set(unique_true_groups) | set(unique_predicted_groups))
+    
+    # Формируем предсказанные группы с учетом правила последовательного присвоения
+    predicted_groups = []
+    current_group = 'unsorted'
+    
+    for idx, row in metrics_df.iterrows():
+        similarity = row['степень схожести']
+        
+        if similarity >= optimal_threshold:
+            current_group = get_predicted_group_name(row['название логотипа'])
+        
+        predicted_groups.append(current_group)
+    
+    # Добавляем предсказанные группы в DataFrame
+    metrics_df['predicted_group'] = predicted_groups
+    
+    # Формируем матрицу ошибок (confusion matrix) по группам
+    y_true = metrics_df['true_group']
+    y_pred = metrics_df['predicted_group']
+    
+    # Создаем confusion matrix с учетом всех возможных групп
+    cm = confusion_matrix(y_true, y_pred, labels=all_groups + ['unsorted'])
+    
+    # Визуализируем confusion matrix в виде heatmap
+    draw_confusion_matrix_heatmap(cm, all_groups + ['unsorted'], 'Confusion Matrix Heatmap for Newspaper/Journal Groups')

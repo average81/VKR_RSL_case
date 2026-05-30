@@ -1,12 +1,13 @@
 # processor/duplicates_processor.py
 
-from processor.feature_extractors import FeatureExtractorSIFT, FeatureExtractorORB, FeatureExtractorKAZE, FeatureExtractorAKAZE
+from processor.feature_extractors import FeatureExtractorSIFT, FeatureExtractorORB, FeatureExtractorKAZE, FeatureExtractorAKAZE, FeatureExtractorDISK
 from processor.feature_matchers import BFMatcher, FLANNmatcher,SymmetricMatcher
 from processor.quality_processor import QualityProcessor
 
 
 matchers = {"BF": BFMatcher, "FLANN": FLANNmatcher, "SM": SymmetricMatcher}
-extractors = {"SIFT": FeatureExtractorSIFT, "ORB": FeatureExtractorORB, "KAZE": FeatureExtractorKAZE, "AKAZE": FeatureExtractorAKAZE}
+extractors = {"SIFT": FeatureExtractorSIFT, "ORB": FeatureExtractorORB, "KAZE": FeatureExtractorKAZE,
+              "AKAZE": FeatureExtractorAKAZE,"DISK":FeatureExtractorDISK}
 
 class DuplicatesProcessor:
     def __init__(self, feature_extractor="SIFT", matcher_type="BF"):
@@ -14,7 +15,10 @@ class DuplicatesProcessor:
             feature_extractor="SIFT"
             self.feature_extractor = FeatureExtractorSIFT()
         else:
-            self.feature_extractor = extractors[feature_extractor]()
+            if feature_extractor == "DISK":
+                self.feature_extractor = extractors[feature_extractor](matcher = matcher_type)
+            else:
+                self.feature_extractor = extractors[feature_extractor]()
         if matcher_type not in matchers:
             self.matcher = BFMatcher(feature_extractor)
         else:
