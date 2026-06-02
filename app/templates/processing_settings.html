@@ -48,6 +48,7 @@
                         <select class="form-select" id="matcher" name="matcher">
                             <option value="FLANN" {{ 'selected' if settings.matcher == 'FLANN' }}>FLANN (Fast Library for Approximate Nearest Neighbors)</option>
                             <option value="BF" {{ 'selected' if settings.matcher == 'BF' }}>Brute Force (поиск по всем парам)</option>
+                            <option value="SM" {{ 'selected' if settings.matcher == 'SM' }}>Symmetric Matcher (на основе kornia)</option>
                         </select>
                         <div class="form-text">Метод поиска соответствий между дескрипторами</div>
                     </div>
@@ -102,6 +103,7 @@
                         <select class="form-select" id="clustermatcher" name="clustermatcher">
                             <option value="FLANN" {{ 'selected' if settings.clustermatcher == 'FLANN' }}>FLANN (Fast Library for Approximate Nearest Neighbors)</option>
                             <option value="BF" {{ 'selected' if settings.clustermatcher == 'BF' }}>Brute Force (поиск по всем парам)</option>
+                            <option value="SM" {{ 'selected' if settings.clustermatcher == 'SM' }}>Symmetric Matcher (на основе kornia)</option>
                         </select>
                         <div class="form-text">Метод поиска соответствий между дескрипторами</div>
                     </div>

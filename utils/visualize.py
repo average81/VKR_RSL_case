@@ -26,6 +26,77 @@ def draw_roc_curve(fpr, tpr, thresholds):
         plt.legend()
         plt.show()
 
+def draw_clusters_bar_chart(df, duplicate_threshold=0.7, num_bins=20):
+    """
+    Отрисовывает столбчатую диаграмму распределения числа изображений (дубликатов и уникальных)
+    по диапазонам схожести.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        DataFrame с колонками 'image' и 'score'
+    duplicate_threshold : float
+        Пороговое значение для определения дубликата
+    num_bins : int
+        Количество баров на графике (по умолчанию 20, каждый покрывает 5% диапазона)
+    """
+    # Создаем колонку true_dupl на основе имени файла (как в roc_auc_dupl.py)
+    df = df.copy()
+    df['true_dupl'] = df['image'].apply(lambda x: x.split('-')[1].split('.')[0] != '1')
+    df['true_dupl'] = df['true_dupl'].astype(int)
+    
+    # Делим диапазон [0, 1] на num_bins бинов
+    bin_edges = np.linspace(0, 1, num_bins + 1)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    
+    # Подсчитываем количество дубликатов и уникальных в каждом бине
+    dup_counts = []
+    unique_counts = []
+    
+    for i in range(num_bins):
+        # Создаем бин-маску
+        mask_dup = (df['score'] >= bin_edges[i]) & (df['score'] < bin_edges[i+1])
+        
+        # Для последнего бина добавляем значения, равные точно 1.0
+        if i == num_bins - 1:
+            mask_dup = mask_dup | (df['score'] == 1.0)
+        
+        dup_count = len(df[(df['true_dupl'] == 1) & mask_dup])
+        unique_count = len(df[(df['true_dupl'] == 0) & mask_dup])
+        
+        dup_counts.append(dup_count)
+        unique_counts.append(unique_count)
+    
+    # Создаем график
+    plt.figure(figsize=(8, 8))
+    
+    width = 0.04  # Ширина столбцов
+    
+    # Столбцы для дубликатов
+    plt.bar(bin_centers - width/2, dup_counts, width, color='red', alpha=0.7, 
+            label=f'Дубликаты (true_dupl=1)', edgecolor='black')
+    
+    # Столбцы для уникальных
+    plt.bar(bin_centers + width/2, unique_counts, width, color='blue', alpha=0.7, 
+            label=f'Уникальные (true_dupl=0)', edgecolor='black')
+    
+    # Добавляем вертикальную линию порога
+    plt.axvline(x=duplicate_threshold, color='green', linestyle='--', linewidth=2, 
+                label=f'Оптимальный порог ({duplicate_threshold})')
+    
+    # Настройки графика
+    plt.xlabel('Степень сходства', fontsize=12)
+    plt.ylabel('Число изображений', fontsize=12)
+    plt.title(f'Распределение дубликатов и уникальных изображений\n'
+              f'(Оптимальный порог: {duplicate_threshold}', fontsize=14)
+    plt.legend(loc='best')
+    plt.xlim(0, 1)
+    plt.xticks(bin_edges, rotation=45)
+    plt.grid(axis='y', alpha=0.3)
+    
+    plt.tight_layout()
+    plt.show()
+
 def draw_confusion_matrix_heatmap(confusion_matrix, labels, title='Confusion Matrix'):
     """
     Отрисовывает confusion matrix в виде heatmap в отдельном окне

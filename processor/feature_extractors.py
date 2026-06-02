@@ -79,7 +79,7 @@ class FeatureExtractorDISK:
             
         # Уменьшаем изображение до максимального размера 3000x3000 с сохранением пропорций
         h, w = rgb_image.shape[:2]
-        max_size = 2000
+        max_size = 2500
         if h > max_size or w > max_size:
             scale = max_size / max(h, w)
             new_w = int(w * scale)

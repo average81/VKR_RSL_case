@@ -1,4 +1,4 @@
-from visualize import draw_roc_curve
+from visualize import draw_roc_curve, draw_clusters_bar_chart
 import utils
 import argparse
 import pandas as pd
@@ -12,11 +12,17 @@ if __name__ == '__main__':
     df['true_dupl'] = df['true_dupl'].astype(int)
     fpr, tpr, thresholds = utils.get_roc_auc_curve_data(df)
     draw_roc_curve(fpr, tpr, thresholds)
+    
     max_th = df[df['true_dupl'] == 1]['score'].min()
     min_th = df[df['true_dupl'] == 0]['score'].max()
     tpmean = df[df['true_dupl'] == 1]['score'].mean()
     fpmean = df[df['true_dupl'] == 0]['score'].mean()
+    optimal_threshold = (max_th + min_th) / 2
+    
     print(f'max_th: {max_th}, min_th: {min_th}')
     print(f"Threshold difference: {max_th - min_th}")
     print(f'tpmean: {tpmean}, fpmean: {fpmean}')
     print(f'tpmean - fpmean: {tpmean - fpmean}')
+    print(f'Optimal threshold: {optimal_threshold}')
+    
+    draw_clusters_bar_chart(df, optimal_threshold)

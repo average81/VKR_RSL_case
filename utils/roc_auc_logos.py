@@ -34,6 +34,8 @@ if __name__ == '__main__':
     mapping_df = pd.read_csv(args.mapping_path)
     
     # Создаем колонку true_group с истинными названиями групп
+    # Удаляем расширения из имен файлов в mapping_df для корректного сравнения
+    mapping_df['image_file'] = mapping_df['image_file'].astype(str).str.split('.').str[0]
     metrics_df['true_group'] = metrics_df['название файла'].apply(lambda x: get_true_group_name(x, mapping_df))
     
     # Сортируем DataFrame по названию файла (предполагаем, что файлы обрабатываются в порядке имен)
@@ -150,3 +152,55 @@ if __name__ == '__main__':
     
     # Визуализируем confusion matrix в виде heatmap
     draw_confusion_matrix_heatmap(cm, all_groups + ['unsorted'], 'Confusion Matrix Heatmap for Newspaper/Journal Groups')
+
+    # Выводим отдельные матрицы ошибок для каждого названия газеты с учетом определения титульных страниц
+    newspaper_names = metrics_df['true_group'].unique()
+    
+    for newspaper in newspaper_names:
+        if pd.isna(newspaper):  # Пропускаем NaN значения
+            continue
+            
+        # Фильтруем данные по конкретному названию газеты
+        newspaper_data = metrics_df[metrics_df['true_group'] == newspaper]
+
+        # Формируем истинные и предсказанные метки для определения титульных страниц
+        # True Positive (TP): верно определенная титульная страница
+        # True Negative (TN): верно не определенная титульная страница
+        # False Positive (FP): неверно определенная титульная страница (включая определение титульной страницы другой газеты)
+        # False Negative (FN): неверно неопределенная титульная страница
+        
+        y_true_title = []
+        y_pred_title = []
+        
+        for idx, row in newspaper_data.iterrows():
+            # Истинная метка: является ли страница титульной (1) или нет (0)
+            # Удаляем расширение из названия файла для сравнения
+            file_name_without_ext = row['название файла'].split('.')[0]
+
+            matching_rows = mapping_df[mapping_df['image_file'] == file_name_without_ext]
+
+            if len(matching_rows) == 0:
+                continue  # Пропускаем, если нет соответствующей строки в mapping_df
+            true_is_title = 1 if matching_rows.iloc[0]['page_number'] == 1 else 0
+            
+            # Предсказанная метка: была ли определена титульная страница
+            # Страница считается определенной как титульная (1), если:
+            # 1. Степень схожести выше оптимального порога
+            # 2. predicted_group совпадает с названием газеты
+            pred_is_title = 1 if (row['степень схожести'] >= optimal_threshold and row['predicted_group'] == newspaper) else 0
+            
+            # Если определяется титульная страница другой газеты (схожесть выше порога, но predicted_group не совпадает с newspaper), то это FP
+            if row['степень схожести'] >= optimal_threshold and row['predicted_group'] != 'unsorted' and row['predicted_group'] != newspaper:
+                pred_is_title = 1
+            
+            y_true_title.append(true_is_title)
+            y_pred_title.append(pred_is_title)
+
+        # Создаем confusion matrix для определения титульных страниц, только если есть данные
+        if len(y_true_title) > 0 and len(y_pred_title) > 0:
+            cm_title = confusion_matrix(y_true_title, y_pred_title, labels=[1, 0])
+            
+            # Визуализируем confusion matrix в виде heatmap для определения титульных страниц данной газеты
+            draw_confusion_matrix_heatmap(cm_title, ['Title Page', 'Not Title Page'], f'Confusion Matrix Heatmap for Title Page Detection: {newspaper}')
+        else:
+            print(f'Недостаточно данных для построения матрицы ошибок для газеты: {newspaper}')
