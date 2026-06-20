@@ -42,8 +42,15 @@ def noise_image(img, noise_prob = 0.2):
     return img
 
 #Функция поворота
-def rotation_image(img, rotation_prob = 0.2):
+def rotation_image(img, rotation_prob = 0.2, rotation_90_prob = 0.3):
     if img is not None:
+
+        # С вероятностью rotation_90_prob выполняем целочисленный поворот на 90, 180 или 270 градусов
+        if random.random() < rotation_90_prob:
+            # Случайный выбор угла поворота
+            k = random.choice([1, 2, 3])  # 1 -> 90, 2 -> 180, 3 -> 270
+            # Поворот на 90, 180 или 270 градусов
+            img = np.rot90(img, k=k).copy()  # .copy() делает массив смежным в памяти для OpenCV
         if random.random() >= rotation_prob:
             # Поворот до 5 градусов, более не разумно
             angle = random.randint(-5, 5)
@@ -176,7 +183,7 @@ def dict_to_xml(data, filename):
     tree = ET.ElementTree(root)
     tree.write(filename, encoding="utf-8", xml_declaration=True)
 
-def dataset_prepare(dataset_path, dataset_save_path = "prep_dataset/", blur_prob = 0.2, noise_prob = 0.2):
+def dataset_prepare(dataset_path, dataset_save_path = "prep_dataset/", blur_prob = 0.2, noise_prob = 0.2, rotation_90_prob = 0.3):
     #Создаем pipeline обработки изображения
     img_num = 1
     double_prob = 0.2
@@ -191,7 +198,7 @@ def dataset_prepare(dataset_path, dataset_save_path = "prep_dataset/", blur_prob
                 img = resize_image(img)
                 img2 = blur_image(img, blur_prob)
                 img2 = noise_image(img2, noise_prob)
-                img2 = rotation_image(img2)
+                img2 = rotation_image(img2, rotation_90_prob=rotation_90_prob)
                 img2, pascal_voc = defects_image(img2)
                 # Устанавливаем параметры в словаре Pascal VOC
                 pascal_voc["annotation"]["folder"] = dataset_save_path
@@ -218,5 +225,6 @@ if __name__ == "__main__":
     parser.add_argument('--dataset_save_path', type=str, default="prep_dataset/", help='Path to save prepared dataset')
     parser.add_argument('--blur_prob', type=float, default=0.2, help='Probability of blur')
     parser.add_argument('--noise_prob', type=float, default=0.2, help='Probability of noise')
+    parser.add_argument('--rotation_90_prob', type=float, default=0.3, help='Probability of 90/180/270 degree rotation')
     args = parser.parse_args()
-    dataset_prepare(args.dataset_path, args.dataset_save_path, args.blur_prob, args.noise_prob)
+    dataset_prepare(args.dataset_path, args.dataset_save_path, args.blur_prob, args.noise_prob, args.rotation_90_prob)

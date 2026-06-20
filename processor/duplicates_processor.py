@@ -2,15 +2,16 @@
 
 from processor.feature_extractors import FeatureExtractorSIFT, FeatureExtractorORB, FeatureExtractorKAZE, FeatureExtractorAKAZE, FeatureExtractorDISK
 from processor.feature_matchers import BFMatcher, FLANNmatcher,SymmetricMatcher
-from processor.quality_processor import QualityProcessor
+from processor.quality_processor import QualityProcessor_brisque
 
 
 matchers = {"BF": BFMatcher, "FLANN": FLANNmatcher, "SM": SymmetricMatcher}
 extractors = {"SIFT": FeatureExtractorSIFT, "ORB": FeatureExtractorORB, "KAZE": FeatureExtractorKAZE,
               "AKAZE": FeatureExtractorAKAZE,"DISK":FeatureExtractorDISK}
+quality_methods = {"BRISQUE": QualityProcessor_brisque}
 
 class DuplicatesProcessor:
-    def __init__(self, feature_extractor="SIFT", matcher_type="BF"):
+    def __init__(self, feature_extractor="SIFT", matcher_type="BF", quality_method = "BRISQUE"):
         if feature_extractor not in extractors:
             feature_extractor="SIFT"
             self.feature_extractor = FeatureExtractorSIFT()
@@ -25,7 +26,8 @@ class DuplicatesProcessor:
             self.matcher = matchers[matcher_type](feature_extractor)
         self.last_kp = None
         self.last_features = None
-        self.quality_processor = QualityProcessor()
+        if quality_method == "BRISQUE":
+            self.quality_processor = QualityProcessor_brisque()
 
     def compare_features(self, kp1, features1, kp2, features2, threshold=0.75):
         """

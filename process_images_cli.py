@@ -11,7 +11,7 @@ import pandas as pd
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 from repository.sql_repository import SQLProcessedRepository, Processed_table, create_sqlengine
 import datetime
-from processor.duplicates_processor import DuplicatesProcessor, matchers, extractors
+from processor.duplicates_processor import DuplicatesProcessor, matchers, extractors,quality_methods
 import cv2
 import re
 import time
@@ -122,13 +122,16 @@ if __name__ == "__main__":
     # Создаем объект сравнения
     matcher = list(matchers.keys())[0]
     extractor = list(extractors.keys())[0]
+    quality_method = list(quality_methods.keys())[0]
     if "matcher" in config.keys():
         matcher = config["matcher"]
     if "feature_extractor" in config.keys():
         extractor = config["feature_extractor"]
-    Dprocessor = DuplicatesProcessor(extractor,matcher)
+    if "quality_method" in config.keys():
+        quality_method = config["quality_method"]
+    Dprocessor = DuplicatesProcessor(extractor,matcher,quality_method)
     logger.info(f"Using {matcher} matcher and {extractor} extractor.")
-
+    logger.info(f"Using {quality_method} quality method and match_threshold={config['match_threshold']}.")
     duplicate_series_name = ''
     metrics = pd.DataFrame(columns=['image', 'score'])
     # Метрики времени

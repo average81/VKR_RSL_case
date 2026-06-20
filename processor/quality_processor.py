@@ -2,17 +2,19 @@
 # класс сравнения качества изображений и выбора лучшего
 import cv2
 import numpy as np
+import os
 from skimage.util import img_as_float
 from skimage.metrics import peak_signal_noise_ratio as psnr
 from brisque import BRISQUE
 
-# Класс оценки качества изображения по методике BRISQUE
-class QualityProcessor:
+
+# Класс оценки качества изображения по методике BRISQUE (библиотека brisque)
+class QualityProcessor_brisque:
 
     def __init__(self):
         self.brisque = BRISQUE()
 
-    def score_brisque(self, img):
+    def score(self, img):
         """
         Оценивает качество изображения с помощью BRISQUE (Blind/Referenceless Image Spatial Quality Evaluator).
         Чем ниже значение — тем выше качество.
@@ -41,7 +43,7 @@ class QualityProcessor:
         """
         scores = []
         for img in imgs:
-            score = self.score_brisque(img)
+            score = self.score(img)
             scores.append(score)
 
         # Лучшее изображение — с минимальным BRISQUE-скором

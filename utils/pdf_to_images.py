@@ -80,7 +80,7 @@ def pdf_to_images(input_path, output_dir, csv_path=None):
                 max_dim = max(width, height)
 
                 # Масштабирование, чтобы меньшая сторона была не менее 2000, а большая — не менее 3000
-                scale_x = 2000 / min_dim if min_dim < 2000 else (3000 / max_dim if max_dim < 3000 else 1)
+                scale_x = 4000 / min_dim if min_dim < 4000 else (6000 / max_dim if max_dim < 6000 else 1)
                 scale_y = scale_x  # Сохраняем пропорции
 
                 mat = fitz.Matrix(scale_x, scale_y)
