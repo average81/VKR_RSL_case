@@ -5,8 +5,8 @@ import torch
 import numpy as np
 
 class FeatureExtractorSIFT:
-    def __init__(self):
-        self.sift = cv2.SIFT_create()
+    def __init__(self, nfeatures=20000):
+        self.sift = cv2.SIFT_create(nfeatures=nfeatures)
     
     def extract_features(self, image):
         # Implement SIFT feature extraction
@@ -18,8 +18,19 @@ class FeatureExtractorSIFT:
         return kp, des
 
 class FeatureExtractorORB:
-    def __init__(self, nfeatures=10000):
-        self.orb = cv2.ORB_create(nfeatures=nfeatures)
+    def __init__(self, nfeatures=20000):
+        try:
+            # Пытаемся использовать CUDA версию ORB
+            if torch.cuda.is_available() and hasattr(cv2, 'cuda'):
+                self.orb = cv2.cuda.createORB(nfeatures=nfeatures)
+                self.use_cuda = True
+            else:
+                self.orb = cv2.ORB_create(nfeatures=nfeatures)
+                self.use_cuda = False
+        except AttributeError:
+            # Если cuda ORB недоступна, используем CPU версию
+            self.orb = cv2.ORB_create(nfeatures=nfeatures)
+            self.use_cuda = False
     
     def extract_features(self, image):
         # Implement ORB feature extraction
@@ -27,12 +38,23 @@ class FeatureExtractorORB:
             grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         else:
             grey = image
-        kp, des = self.orb.detectAndCompute(grey, None)
+        
+        if self.use_cuda:
+            # Для CUDA версии нужно использовать gpu изображения
+            grey_gpu = cv2.cuda_GpuMat()
+            grey_gpu.upload(grey)
+            kp, des = self.orb.detectAndCompute(grey_gpu, None)
+            # Скачиваем дескрипторы с GPU
+            if des is not None:
+                des = des.cpu() if hasattr(des, 'cpu') else des
+        else:
+            kp, des = self.orb.detectAndCompute(grey, None)
         return kp, des
 
 class FeatureExtractorKAZE:
-    def __init__(self):
+    def __init__(self, nfeatures=20000):
         self.kaze = cv2.KAZE_create()
+        self.nfeatures =nfeatures
     
     def extract_features(self, image):
         # Implement KAZE feature extraction
@@ -41,11 +63,17 @@ class FeatureExtractorKAZE:
         else:
             grey = image
         kp, des = self.kaze.detectAndCompute(grey, None)
+        if len(kp) > self.nfeatures:
+            # сортируем по response и берём топ-N
+            sorted_idx = sorted(range(len(kp)), key=lambda i: kp[i].response, reverse=True)[:self.nfeatures]
+            kp = [kp[i] for i in sorted_idx]
+            des = des[sorted_idx]
         return kp, des
 
 class FeatureExtractorAKAZE:
-    def __init__(self):
+    def __init__(self, nfeatures=20000):
         self.akaze = cv2.AKAZE_create()
+        self.nfeatures =nfeatures
     
     def extract_features(self, image):
         # Implement AKAZE feature extraction
@@ -54,6 +82,11 @@ class FeatureExtractorAKAZE:
         else:
             grey = image
         kp, des = self.akaze.detectAndCompute(grey, None)
+        if len(kp) > self.nfeatures:
+            # сортируем по response и берём топ-N
+            sorted_idx = sorted(range(len(kp)), key=lambda i: kp[i].response, reverse=True)[:self.nfeatures]
+            kp = [kp[i] for i in sorted_idx]
+            des = des[sorted_idx]
         return kp, des
 
 

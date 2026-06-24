@@ -129,7 +129,11 @@ if __name__ == "__main__":
         extractor = config["feature_extractor"]
     if "quality_method" in config.keys():
         quality_method = config["quality_method"]
-    Dprocessor = DuplicatesProcessor(extractor,matcher,quality_method)
+    if "nfeatures" in config.keys():
+        nfeatures = config["nfeatures"]
+    else:
+        nfeatures=None
+    Dprocessor = DuplicatesProcessor(extractor,nfeatures,matcher,quality_method)
     logger.info(f"Using {matcher} matcher and {extractor} extractor.")
     logger.info(f"Using {quality_method} quality method and match_threshold={config['match_threshold']}.")
     duplicate_series_name = ''
