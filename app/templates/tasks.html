@@ -334,6 +334,13 @@ async function validateTask(taskId) {
                                 <label for="duplicateThresholdStage1" class="form-label">Порог дубликатов</label>
                                 <input type="number" class="form-control" id="duplicateThresholdStage1" name="duplicate_threshold_stage1" step="0.01" min="0" max="1" value="0.9">
                             </div>
+                            
+                            <div class="mb-3">
+                                <label for="nfeaturesStage1" class="form-label">Максимальное число ключевых точек ({{ settings.nfeatures_stage1 if settings else 20000 }})</label>
+                                <input type="range" class="form-range" id="nfeaturesStage1" name="nfeatures_stage1" 
+                                       min="1000" max="100000" step="1000" value="{{ settings.nfeatures_stage1 if settings else 20000 }}">
+                                <div class="form-text">Максимальное число ключевых точек для извлечения из каждого изображения</div>
+                            </div>
                         </div>
                         
                         <!-- Параметры второго этапа (группировка по выпускам) -->
@@ -368,6 +375,13 @@ async function validateTask(taskId) {
                                 <label for="logosPath" class="form-label">Путь к папке логотипов</label>
                                 <input type="text" class="form-control" id="logosPath" name="logos_path" placeholder="/path/to/logos">
                             </div>
+                            
+                            <div class="mb-3">
+                                <label for="nfeaturesStage2" class="form-label">Максимальное число ключевых точек ({{ settings.nfeatures_stage2 if settings else 20000 }})</label>
+                                <input type="range" class="form-range" id="nfeaturesStage2" name="nfeatures_stage2" 
+                                       min="1000" max="100000" step="1000" value="{{ settings.nfeatures_stage2 if settings else 20000 }}">
+                                <div class="form-text">Максимальное число ключевых точек для извлечения из каждого изображения</div>
+                            </div>
 
                         </div>
                     </div>
@@ -382,6 +396,47 @@ async function validateTask(taskId) {
 </div>
 
 {% block scripts %}
+<script>
+// Настройка обработчиков изменений для слайдеров
+function setupSliderListeners() {
+    const sliders = [
+        { id: 'nfeaturesStage1', suffix: '' },
+        { id: 'nfeaturesStage2', suffix: '' }
+    ];
+    
+    sliders.forEach(slider => {
+        const element = document.getElementById(slider.id);
+        const label = document.querySelector(`label[for="${slider.id}"]`);
+        if (element && label) {
+            element.addEventListener('input', function() {
+                label.textContent = `${label.textContent.split(' (')[0]} (${this.value}${slider.suffix})`;
+            });
+        }
+    });
+}
+
+// Обновление меток слайдеров
+function updateSliderLabels() {
+    const sliders = [
+        { id: 'nfeaturesStage1', suffix: '' },
+        { id: 'nfeaturesStage2', suffix: '' }
+    ];
+    
+    sliders.forEach(slider => {
+        const element = document.getElementById(slider.id);
+        const label = document.querySelector(`label[for="${slider.id}"]`);
+        if (element && label) {
+            // Обновляем текст метки с текущим значением в скобках
+            const baseText = label.textContent.split(' (')[0];
+            label.textContent = baseText + ' (' + element.value + slider.suffix + ')';
+        }
+    });
+}
+
+// Вызываем функции сразу (если элементы уже существуют)
+updateSliderLabels();
+setupSliderListeners();
+</script>
 <script src="/static/js/tasks.js"></script>
 {% endblock %}
 {% endblock %}

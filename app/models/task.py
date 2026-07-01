@@ -34,12 +34,14 @@ class Task(Base):
     quality_algorithm = Column(String)
     match_threshold_stage1 = Column(Float)
     duplicate_threshold_stage1 = Column(Float)
+    nfeatures_stage1 = Column(Integer, default=20000)
     
     # Параметры второго этапа (кластеризация по выпускам)
     feature_extractor_stage2 = Column(String)
     matcher_stage2 = Column(String, default="FLANN")
     duplicate_threshold_stage2 = Column(Float)
     match_threshold_stage2 = Column(Float)
+    nfeatures_stage2 = Column(Integer, default=20000)
     logos_path = Column(String)
     
     # Параметры валидации
@@ -64,12 +66,14 @@ class TaskBase(BaseModel):
     quality_algorithm: Optional[str] = 'BRISQUE'
     match_threshold_stage1: Optional[float] = 0.75
     duplicate_threshold_stage1: Optional[float] = 0.9
+    nfeatures_stage1: Optional[int] = 20000
 
     # Параметры второго этапа
     feature_extractor_stage2: Optional[str] = 'SIFT'
     matcher_stage2: Optional[str] = 'FLANN'
     duplicate_threshold_stage2: Optional[float] = 0.8
     logos_path: Optional[str] = ''
+    nfeatures_stage2: Optional[int] = 20000
 
     # Параметры валидации
     validate_stage1: bool = False

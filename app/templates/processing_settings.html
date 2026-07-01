@@ -42,6 +42,13 @@
                             <div class="form-text">Алгоритм обнаружения ключевых точек на изображении</div>
                         </div>
 
+                        <div class="mb-3">
+                            <label for="nfeatures_stage1" class="form-label">Максимальное число признаков ({{ settings.nfeatures_stage1 }})</label>
+                            <input type="range" class="form-range" id="nfeatures_stage1" name="nfeatures_stage1" 
+                                   min="1000" max="100000" step="1000" value="{{ settings.nfeatures_stage1 }}">
+                            <div class="form-text">Максимальное число ключевых точек для извлечения из каждого изображения</div>
+                        </div>
+
                     </div>
                     <div class="mb-3">
                         <label for="matcher" class="form-label">Алгоритм сопоставления</label>
@@ -95,6 +102,13 @@
                                 <option value="AKAZE" {{ 'selected' if settings.clusterfeatureDetector == 'AKAZE' }}>AKAZE (Accelerated-KAZE)</option>
                             </select>
                             <div class="form-text">Алгоритм обнаружения ключевых точек на изображении</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="nfeatures_stage2" class="form-label">Максимальное число признаков ({{ settings.nfeatures_stage2 }})</label>
+                            <input type="range" class="form-range" id="nfeatures_stage2" name="nfeatures_stage2" 
+                                   min="1000" max="100000" step="1000" value="{{ settings.nfeatures_stage2 }}">
+                            <div class="form-text">Максимальное число ключевых точек для извлечения из каждого изображения</div>
                         </div>
 
                     </div>
@@ -152,7 +166,9 @@ function updateSliderLabels() {
         { id: 'matchThreshold', suffix: '' },
         { id: 'duplicateThreshold', suffix: '' },
         { id: 'clustermatchThreshold', suffix: '' },
-        { id: 'clusterThreshold', suffix: '' }
+        { id: 'clusterThreshold', suffix: '' },
+        { id: 'nfeatures_stage1', suffix: '' },
+        { id: 'nfeatures_stage2', suffix: '' }
     ];
     
     sliders.forEach(slider => {

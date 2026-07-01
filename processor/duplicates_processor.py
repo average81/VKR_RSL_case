@@ -26,6 +26,7 @@ class DuplicatesProcessor:
             self.matcher = matchers[matcher_type](feature_extractor)
         self.last_kp = None
         self.last_features = None
+        self.nfeatures = nfeatures
         if quality_method in quality_methods.keys():
             self.quality_processor = quality_methods[quality_method]()
         else:

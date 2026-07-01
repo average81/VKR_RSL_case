@@ -101,8 +101,10 @@ def process_images_task(
         # Инициализация процессора дубликатов
         matcher = config.get("matcher", "BF")
         extractor = config.get("feature_extractor", "ORB")
-        Dprocessor = DuplicatesProcessor(extractor, matcher)
-        logger.info(f"Using {matcher} matcher and {extractor} extractor.")
+        nfeatures = config.get("nfeatures", 20000)
+        quality_method = config["quality_method"]
+        Dprocessor = DuplicatesProcessor(extractor, nfeatures, matcher,quality_method)
+        logger.info(f"Using {matcher} matcher and {extractor} extractor with nfeatures={nfeatures}.")
         #Убираем уже обработанные изображения из списка
 
 
@@ -516,10 +518,11 @@ def process_logos_task(
         # Инициализация процессора дубликатов
         feature_extractor = config.get("feature_extractor", "KAZE")
         matcher_type = config.get("matcher", "BF")
+        nfeatures = config.get("nfeatures", 20000)
         similarity_threshold = config.get("duplicate_threshold", 0.7)
         match_threshold = config.get("match_threshold", 0.75)
         
-        processor = DuplicatesProcessor(feature_extractor=feature_extractor, matcher_type=matcher_type)
+        processor = DuplicatesProcessor(feature_extractor=feature_extractor, nfeatures=nfeatures, matcher_type=matcher_type)
         # Словарь для хранения счётчиков по каждой папке
         # Инициализация счётчиков для каждой группы на основе уже обработанных изображений
         folder_counters = {}
@@ -556,7 +559,7 @@ def process_logos_task(
                         continue
                     
                     kp, des = processor.feature_extractor.extract_features(logo_img)
-                    logo_features[(folder_name, logo_name)] = (kp, des)
+                    logo_features[(folder_name, logo_name)] = (kp, des, logo_img.shape[:2])
                     logger.info(f"Извлечены признаки из логотипа: {folder_name}/{logo_name}")
                 except Exception as e:
                     logger.error(f"Ошибка при обработке логотипа {logo_path}: {e}")
@@ -568,11 +571,16 @@ def process_logos_task(
         group_folder_path = None
         is_first_logo_found = False
         unsorted_count = 0
+        folder_counters = {}
         if processed_images:
             last_image = processed_images[-1]  # последняя запись
             current_group = last_image.issue_name
-            is_first_logo_found = True
-            group_folder_path = os.path.join(output_dir, current_group,str(folder_counters[current_group]))
+            if current_group and current_group != 'unsorted':
+                is_first_logo_found = True
+                folder_counters[current_group] = folder_counters.get(current_group, 0)
+                group_folder_path = os.path.join(output_dir, current_group, str(folder_counters[current_group]))
+            else:
+                current_group = None
         
         logger.info(f"Начинаю обработку {len(input_images)} изображений...")
         
@@ -602,7 +610,7 @@ def process_logos_task(
             
             # Извлечение признаков
             kp2, des2 = processor.feature_extractor.extract_features(input_img)
-            
+            hw2 = input_img.shape[:2]
             if des2 is None or des2.size == 0:
                 logger.warning(f"Пропуск изображения {input_img_name}: не найдено ключевых точек")
                 
@@ -682,9 +690,9 @@ def process_logos_task(
             best_folder_name = ""
             best_logo_name = None
             
-            for (folder_name, logo_name), (kp1, des1) in logo_features.items():
+            for (folder_name, logo_name), (kp1, des1,hw1) in logo_features.items():
                 try:
-                    similarity = processor.compare_features(kp1, des1, kp2, des2, match_threshold)
+                    similarity = processor.compare_features(kp1, des1, kp2, des2, hw1, hw2, match_threshold)
                     if similarity > max_similarity:
                         max_similarity = similarity
                         best_folder_name = folder_name

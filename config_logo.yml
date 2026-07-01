@@ -3,3 +3,4 @@ duplicate_threshold: 0.6
 match_threshold: 0.6
 matcher: FLANN  # Доступные: BF, FLANN, SM
 feature_extractor: AKAZE # Доступные: SIFT, ORB, KAZE, AKAZE, DISK
+nfeatures: 25000

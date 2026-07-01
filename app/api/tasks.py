@@ -118,7 +118,7 @@ async def get_default_settings(
     """
     Получение настроек по умолчанию
     """
-    from sqlalchemy import text
+    from sqlalchemy import text, inspect
 
     # Проверяем наличие таблицы task_options, создаем если не существует
     db.execute(text('''
@@ -132,9 +132,24 @@ async def get_default_settings(
         feature_extractor_stage2 TEXT DEFAULT 'SIFT',
         matcher_stage2 TEXT DEFAULT 'FLANN',
         duplicate_threshold_stage2 REAL DEFAULT 0.8,
-        logos_path TEXT
+        logos_path TEXT,
+        nfeatures_stage1 INTEGER DEFAULT 20000,
+        nfeatures_stage2 INTEGER DEFAULT 20000
     )
     '''))
+    
+    # Проверяем, существуют ли колонки nfeatures_stage1 и nfeatures_stage2
+    inspector = inspect(db.bind)
+    columns = [col['name'] for col in inspector.get_columns('task_options')]
+    
+    # Добавляем колонки, если они не существуют
+    if 'nfeatures_stage1' not in columns:
+        db.execute(text('ALTER TABLE task_options ADD COLUMN nfeatures_stage1 INTEGER DEFAULT 20000'))
+    
+    if 'nfeatures_stage2' not in columns:
+        db.execute(text('ALTER TABLE task_options ADD COLUMN nfeatures_stage2 INTEGER DEFAULT 20000'))
+    
+    db.commit()
 
     # Получаем настройки по умолчанию
     result = db.execute(text('SELECT * FROM task_options LIMIT 1'))
@@ -154,7 +169,9 @@ async def get_default_settings(
             "feature_extractor_stage2": "SIFT",
             "matcher_stage2": "FLANN",
             "duplicate_threshold_stage2": 0.8,
-            "logos_path": None
+            "logos_path": None,
+            "nfeatures_stage1": 20000,
+            "nfeatures_stage2": 20000
         }
 
     # Преобразуем результат в словарь
@@ -362,7 +379,9 @@ async def create_task_form(
                 'feature_extractor_stage2': 'SIFT',
                 'matcher_stage2': 'FLANN',
                 'duplicate_threshold_stage2': 0.8,
-                'logos_path': None
+                'logos_path': None,
+                'nfeatures_stage1': 20000,
+                'nfeatures_stage2': 20000
             }
         else:
             columns = result.keys()
@@ -379,7 +398,9 @@ async def create_task_form(
             'feature_extractor_stage2': 'SIFT',
             'matcher_stage2': 'FLANN',
             'duplicate_threshold_stage2': 0.8,
-            'logos_path': None
+            'logos_path': None,
+            'nfeatures_stage1': 20000,
+            'nfeatures_stage2': 20000
         }
 
     # Сначала обновляем данные задачи значениями по умолчанию
@@ -674,7 +695,9 @@ async def get_processing_settings(
         "clusterfeatureDetector": "SIFT",
         "clustermatcher": "FLANN",
         "cluster_threshold": 0.5,
-        "clustermatchThreshold": 0.7
+        "clustermatchThreshold": 0.7,
+        "nfeatures_stage1": 20000,
+        "nfeatures_stage2": 20000
     }
 
     # Get saved settings from task
@@ -690,7 +713,9 @@ async def get_processing_settings(
             'match_threshold_stage2': 'clustermatchThreshold',
             'duplicate_threshold_stage1': 'duplicate_threshold',
             'duplicate_threshold_stage2': 'cluster_threshold',
-            'quality_algorithm': 'duplicate_quality'
+            'quality_algorithm': 'duplicate_quality',
+            'nfeatures_stage1': 'nfeatures_stage1',
+            'nfeatures_stage2': 'nfeatures_stage2'
         }
         
         # Apply values from database fields if they exist
@@ -720,6 +745,8 @@ class ProcessingSettings(BaseModel):
     clustermatcher: str = "FLANN"
     cluster_threshold: float = 0.5
     clustermatchThreshold: float = 0.7
+    nfeatures_stage1: int = 20000
+    nfeatures_stage2: int = 20000
 
 @router.post("/{task_id}/download")
 async def download_task_results(
@@ -815,7 +842,9 @@ async def save_processing_settings(
         'clusterfeatureDetector': 'feature_extractor_stage2',
         'clustermatcher': 'matcher_stage2',
         'cluster_threshold': 'duplicate_threshold_stage2',
-        'clustermatchThreshold': 'match_threshold_stage2'
+        'clustermatchThreshold': 'match_threshold_stage2',
+        'nfeatures_stage1': 'nfeatures_stage1',
+        'nfeatures_stage2': 'nfeatures_stage2'
     }
     
     # Apply settings to task model fields
@@ -842,6 +871,8 @@ async def save_global_task_settings(
     matcher_stage2: str = Form("FLANN"),
     duplicate_threshold_stage2: float = Form(0.8),
     logos_path: str = Form(None),
+    nfeatures_stage1: int = Form(20000),
+    nfeatures_stage2: int = Form(20000),
     current_user = Depends(get_current_user),
     db = Depends(get_db)
 ):
@@ -866,7 +897,9 @@ async def save_global_task_settings(
         feature_extractor_stage2 TEXT DEFAULT 'SIFT',
         matcher_stage2 TEXT DEFAULT 'FLANN',
         duplicate_threshold_stage2 REAL DEFAULT 0.8,
-        logos_path TEXT
+        logos_path TEXT,
+        nfeatures_stage1 INTEGER DEFAULT 20000,
+        nfeatures_stage2 INTEGER DEFAULT 20000
     )
     '''))
 
@@ -879,11 +912,11 @@ async def save_global_task_settings(
         feature_extractor_stage1, matcher_stage1, quality_algorithm,
         match_threshold_stage1, duplicate_threshold_stage1,
         feature_extractor_stage2, matcher_stage2, duplicate_threshold_stage2,
-        logos_path
+        logos_path, nfeatures_stage1, nfeatures_stage2
     ) VALUES (:feature_extractor_stage1, :matcher_stage1, :quality_algorithm,
              :match_threshold_stage1, :duplicate_threshold_stage1,
              :feature_extractor_stage2, :matcher_stage2, :duplicate_threshold_stage2,
-             :logos_path)
+             :logos_path, :nfeatures_stage1, :nfeatures_stage2)
     '''), {
         'feature_extractor_stage1': feature_extractor_stage1,
         'matcher_stage1': matcher_stage1,
@@ -893,7 +926,9 @@ async def save_global_task_settings(
         'feature_extractor_stage2': feature_extractor_stage2,
         'matcher_stage2': matcher_stage2,
         'duplicate_threshold_stage2': duplicate_threshold_stage2,
-        'logos_path': logos_path
+        'logos_path': logos_path,
+        'nfeatures_stage1': nfeatures_stage1,
+        'nfeatures_stage2': nfeatures_stage2
     })
     
     db.commit()

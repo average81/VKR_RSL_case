@@ -3,5 +3,5 @@ duplicate_threshold: 0.1
 match_threshold: 0.5
 matcher: BF  # Доступные: BF, FLANN, SM, SMADALAM
 feature_extractor: ORB # Доступные: SIFT, ORB, KAZE, AKAZE
-quality_method: CONIQA #BRISQUE
+quality_method: BRISQUE #BRISQUE
 nfeatures: 25000

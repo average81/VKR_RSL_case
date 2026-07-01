@@ -136,11 +136,19 @@ $(document).ready(function() {
                 $('#qualityAlgorithm').val(settings.quality_algorithm || 'BRISQUE');
                 $('#matchThresholdStage1').val(settings.match_threshold_stage1 !== null ? settings.match_threshold_stage1 : 0.75);
                 $('#duplicateThresholdStage1').val(settings.duplicate_threshold_stage1 !== null ? settings.duplicate_threshold_stage1 : 0.9);
+                $('#nfeaturesStage1').val(settings.nfeatures_stage1 !== null ? settings.nfeatures_stage1 : 20000);
                 
                 $('#featureExtractorStage2').val(settings.feature_extractor_stage2 || 'SIFT');
                 $('#matcherStage2').val(settings.matcher_stage2 || 'FLANN');
                 $('#duplicateThresholdStage2').val(settings.duplicate_threshold_stage2 !== null ? settings.duplicate_threshold_stage2 : 0.8);
                 $('#logosPath').val(settings.logos_path || '');
+                $('#nfeaturesStage2').val(settings.nfeatures_stage2 !== null ? settings.nfeatures_stage2 : 20000);
+                
+                // Обновляем метки слайдеров с текущими значениями
+                updateSliderLabels();
+                
+                // Настраиваем обработчики изменений для слайдеров
+                setupSliderListeners();
             } else {
                 console.error('Failed to load default settings');
             }
@@ -149,6 +157,8 @@ $(document).ready(function() {
         }
     });
 });
+
+
 
 // Функция для обновления прогресса одной задачи
 async function updateTaskProgress(taskId) {
@@ -225,4 +235,6 @@ function initProgressUpdates() {
 }
 
 // Запускаем инициализацию после загрузки страницы
-document.addEventListener('DOMContentLoaded', initProgressUpdates);
+document.addEventListener('DOMContentLoaded', function() {
+    initProgressUpdates();
+});

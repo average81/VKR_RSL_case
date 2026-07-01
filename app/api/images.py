@@ -336,7 +336,9 @@ def start_image_processing(
             "match_threshold": task.match_threshold_stage1 or 0.75,
             "duplicate_threshold": task.duplicate_threshold_stage1 or 0.7,
             "matcher": task.matcher_stage1 or "BF",
-            "feature_extractor": task.feature_extractor_stage1 or "KAZE"
+            "feature_extractor": task.feature_extractor_stage1 or "KAZE",
+            "nfeatures": task.n_features_stage1,
+            "quality_method": task.quality_algorithm
         }
         
         # Запуск обработки изображений для поиска дубликатов
@@ -357,7 +359,8 @@ def start_image_processing(
             "match_threshold": task.match_threshold_stage2 or 0.75,
             "duplicate_threshold": task.duplicate_threshold_stage2 or 0.7,
             "matcher": task.matcher_stage2 or "BF",
-            "feature_extractor": task.feature_extractor_stage2 or "KAZE"
+            "feature_extractor": task.feature_extractor_stage2 or "KAZE",
+            "nfeatures": task.nfeatures_stage2,
         }
         
         # Запуск группировки по логотипам

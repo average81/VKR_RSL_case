@@ -84,11 +84,12 @@ def main(input_folder, output_folder, logos_folder, config, save_metrics=False, 
     
     feature_extractor = config.get("feature_extractor", "KAZE")
     matcher_type = config.get("matcher", "BF")
+    nfeatures = config.get("nfeatures_stage2", 20000)
     similarity_threshold = config.get("duplicate_threshold", 0.7)
     match_threshold = config.get("match_threshold", 0.75)
     
     # Инициализация процессора дубликатов
-    processor = DuplicatesProcessor(feature_extractor=feature_extractor, matcher_type=matcher_type)
+    processor = DuplicatesProcessor(feature_extractor=feature_extractor, nfeatures=nfeatures, matcher_type=matcher_type)
     
     # Словарь для хранения счётчиков по каждой папке
     folder_counters = {}
@@ -117,7 +118,7 @@ def main(input_folder, output_folder, logos_folder, config, save_metrics=False, 
                 # Извлечение ключевых точек и дескрипторов
                 kp, des = processor.feature_extractor.extract_features(logo_img)
                 # Используем составной ключ (папка, имя_логотипа) для уникальности
-                logo_features[(folder_name, logo_name)] = (kp, des)
+                logo_features[(folder_name, logo_name)] = (kp, des, logo_img.shape[:2])
                 logging.info(f"Извлечены признаки из логотипа: {folder_name}/{logo_name}")
                 
             except Exception as e:
@@ -181,11 +182,11 @@ def main(input_folder, output_folder, logos_folder, config, save_metrics=False, 
                 # Получение признаков из кэша
                 if (folder_name, logo_name) not in logo_features:
                     continue
-                
-                kp1, des1 = logo_features[(folder_name, logo_name)]
+
+                kp1, des1, hw1 = logo_features[(folder_name, logo_name)]
 
                 # Сравнение изображения с признаками логотипа
-                similarity = processor.compare_features(kp1, des1, kp2, des2, match_threshold)
+                similarity = processor.compare_features(kp1, des1, kp2, des2, hw1, input_img.shape[:2], match_threshold)
                 
                 # Обновляем лучшее совпадение
                 if similarity > max_similarity:

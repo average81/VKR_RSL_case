@@ -134,7 +134,7 @@ if __name__ == "__main__":
     else:
         nfeatures=None
     Dprocessor = DuplicatesProcessor(extractor,nfeatures,matcher,quality_method)
-    logger.info(f"Using {matcher} matcher and {extractor} extractor.")
+    logger.info(f"Using {matcher} matcher and {extractor} extractor with nfeatures={nfeatures}.")
     logger.info(f"Using {quality_method} quality method and match_threshold={config['match_threshold']}.")
     duplicate_series_name = ''
     metrics = pd.DataFrame(columns=['image', 'score'])
