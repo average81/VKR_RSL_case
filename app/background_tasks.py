@@ -210,6 +210,7 @@ def process_images_task(
                             db_image.is_main_duplicate = True
                             db_image.processed_path = duplicates_dir
                             db_image.duplicate_group=duplicate_series_name
+                            db_image.similarity_score = score
                             db.commit()
 
                     local_duplicates.append(last_processed_image)
@@ -231,7 +232,8 @@ def process_images_task(
                         duplicate_group=duplicate_series_name,
                         validation_status="pending",
                         created_at=current_time,
-                        updated_at=current_time
+                        updated_at=current_time,
+                        similarity_score=score
                     )
                     db.add(db_image)
                     db.commit()
@@ -272,6 +274,7 @@ def process_images_task(
                             if db_image:
                                 db_image.is_main_duplicate = True
                                 db_image.processed_path = output_dir
+                                db_image.similarity_score = score
                                 db.commit()
 
                         local_duplicates = []
@@ -289,7 +292,8 @@ def process_images_task(
                         is_duplicate=False,
                         validation_status="pending",
                         created_at=current_time,
-                        updated_at=current_time
+                        updated_at=current_time,
+                        similarity_score=score
                     )
                     db.add(db_image)
                     db.commit()
@@ -308,7 +312,8 @@ def process_images_task(
                     is_duplicate=False,
                     validation_status="pending",
                     created_at=current_time,
-                    updated_at=current_time
+                    updated_at=current_time,
+                    similarity_score=0.0
                 )
                 db.add(db_image)
                 db.commit()

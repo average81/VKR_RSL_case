@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Float, JSON
 from sqlalchemy.sql import func
 from app.database import Base
 from pydantic import BaseModel
@@ -20,6 +20,7 @@ class Image(Base):
     issue_name = Column(String)  # название выпуска
     issue_number = Column(Integer)  # порядковый номер выпуска
     quality_score = Column(Integer)  # оценка качества изображения
+    similarity_score = Column(Float)  # степень схожести с предыдущим изображением
     validation_status = Column(String, default="pending")  # pending, user_validated, leader_validated
     validated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
