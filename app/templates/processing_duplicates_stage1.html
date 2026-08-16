@@ -7,14 +7,22 @@
 <div id="processing-stage1" 
      data-task-id="{{ task.id }}" 
      data-group-id="{{ current_group.id }}"
-     data-group-ids="{{ group_ids|join(',') }}">
+     data-group-ids="{{ group_ids|join(',') }}"
+     data-sort-by="{{ sort_by }}">
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1>Этап 1: Поиск дубликатов</h1>
         <p class="text-muted">Задача: {{ task.title }}</p>
     </div>
-    <div class="text-end">
+    <div class="d-flex align-items-center gap-3">
+        <div>
+            <label for="sort-select" class="me-2">Сортировка групп:</label>
+            <select class="form-select form-select-sm" id="sort-select" onchange="changeSort(this.value)">
+                <option value="order" {% if sort_by == 'order' %}selected{% endif %}>По порядку</option>
+                <option value="similarity" {% if sort_by == 'similarity' %}selected{% endif %}>По степени сходства</option>
+            </select>
+        </div>
         <div class="btn-group" role="group">
             <button class="btn btn-outline-secondary" id="prev-group-btn">
                 <i class="bi bi-arrow-left"></i> Предыдущая
@@ -74,6 +82,11 @@
                                 <label class="form-check-label" for="image_{{ image.id }}"></label>
                             </div>
                         </div>
+                        {% if image.similarity_score is not none and not image.is_main_duplicate %}
+                        <div class="position-absolute bottom-0 start-0 m-2">
+                            <span class="badge bg-primary">{{ "{:.0%}".format(image.similarity_score) }}</span>
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="card-body p-2">
                         <small class="text-muted">{{ image.filename }}</small>

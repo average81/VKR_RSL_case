@@ -100,13 +100,16 @@ def get_task_with_review(
     return task
 
 
-def get_duplicate_groups_for_task(task_id: int, db: Session) -> Dict[str, List[Image]]:
+def get_duplicate_groups_for_task(task_id: int, db: Session, sort_by: str = "order") -> Dict[str, List[Image]]:
     """
     Получает группы дубликатов для задачи.
     
     Args:
         task_id: ID задачи
         db: Сессия базы данных
+        sort_by: Порядок сортировки ('order' или 'similarity')
+            - 'order': группы по имени файла, изображения по порядку
+            - 'similarity': группы по среднему similarity_score (без главного), изображения по порядку
     
     Returns:
         Словарь групп дубликатов, где ключи - имена групп (без расширения)
@@ -131,14 +134,31 @@ def get_duplicate_groups_for_task(task_id: int, db: Session) -> Dict[str, List[I
             duplicate_groups[group_name] = []
         duplicate_groups[group_name].append(image)
     
-    # Сортируем группы по имени
-    return dict(sorted(duplicate_groups.items()))
+    # Сортируем группы по среднему similarity_score (если требуется)
+    if sort_by == "similarity":
+        def group_average_similarity(group_images):
+            """Вычисляет среднее similarity_score, исключая главное изображение"""
+            scores = [
+                img.similarity_score for img in group_images
+                if img.similarity_score is not None and not img.is_main_duplicate
+            ]
+            if not scores:
+                return 0.0
+            return sum(scores) / len(scores)
+        
+        # Сортируем группы по возрастанию среднего similarity_score
+        duplicate_groups = dict(
+            sorted(duplicate_groups.items(), key=lambda x: group_average_similarity(x[1]), reverse=False)
+        )
+    
+    return duplicate_groups
 
 @router.get("/stage1/{task_id}")
 async def get_processing_stage1(
     request: Request,
     task_id: int,
     group_id: str = None,
+    sort_by: str = Query("order", regex="^(order|similarity)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -149,6 +169,7 @@ async def get_processing_stage1(
         request: Объект запроса
         task_id: ID задачи
         group_id: ID группы дубликатов (конкретный ID)
+        sort_by: Порядок сортировки ('order' или 'similarity')
         db: Сессия базы данных
         current_user: Текущий пользователь
     
@@ -158,8 +179,8 @@ async def get_processing_stage1(
     # Получаем задачу с проверкой доступа и валидацией
     task = get_task_with_review(task_id, db, current_user)
     
-    # Получаем все группы дубликатов
-    duplicate_groups = get_duplicate_groups_for_task(task_id, db)
+    # Получаем все группы дубликатов с указанной сортировкой
+    duplicate_groups = get_duplicate_groups_for_task(task_id, db, sort_by)
     
     if not duplicate_groups:
         raise HTTPException(
@@ -187,6 +208,7 @@ async def get_processing_stage1(
             "images": current_group,
         },
         "group_ids": group_ids,
+        "sort_by": sort_by,
         "progress": {
             "current": current_group_idx + 1,
             "total": len(group_ids)

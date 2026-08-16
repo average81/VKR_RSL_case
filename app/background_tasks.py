@@ -210,7 +210,7 @@ def process_images_task(
                             db_image.is_main_duplicate = True
                             db_image.processed_path = duplicates_dir
                             db_image.duplicate_group=duplicate_series_name
-                            db_image.similarity_score = score
+                            #db_image.similarity_score = score
                             db.commit()
 
                     local_duplicates.append(last_processed_image)
@@ -272,9 +272,9 @@ def process_images_task(
                             ).first()
 
                             if db_image:
-                                db_image.is_main_duplicate = True
+                                #db_image.is_main_duplicate = True
                                 db_image.processed_path = output_dir
-                                db_image.similarity_score = score
+                                #db_image.similarity_score = score
                                 db.commit()
 
                         local_duplicates = []

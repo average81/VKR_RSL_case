@@ -6,6 +6,7 @@
 const ProcessingStage1 = {
     taskId: null,
     groupId: null,
+    sortBy: "order",
     
     /**
      * Инициализация страницы обработки
@@ -14,6 +15,7 @@ const ProcessingStage1 = {
         // Получаем данные из глобального объекта или атрибутов элементов
         this.taskId = parseInt(document.getElementById('processing-stage1').dataset.taskId);
         this.groupId = document.getElementById('processing-stage1').dataset.groupId;
+        this.sortBy = document.getElementById('processing-stage1').dataset.sortBy || "order";
         
         // Получаем список всех group_id из data-атрибута
         this.groupIds = document.getElementById('processing-stage1').dataset.groupIds
@@ -64,7 +66,7 @@ const ProcessingStage1 = {
         
         // Проверяем, что индекс изменился и находится в допустимом диапазоне
         if (newIndex !== -1 && newIndex !== currentIndex) {
-            window.location.href = `/processing/stage1/${this.taskId}?group_id=${this.groupIds[newIndex]}`;
+            window.location.href = `/processing/stage1/${this.taskId}?group_id=${this.groupIds[newIndex]}&sort_by=${this.sortBy}`;
         }
     },
     
@@ -261,3 +263,19 @@ document.addEventListener('DOMContentLoaded', () => {
         ProcessingStage1.init();
     }
 });
+
+/**
+ * Обработчик изменения сортировки
+ * @param {string} sortBy - 'order' или 'similarity'
+ */
+function changeSort(sortBy) {
+    const container = document.getElementById('processing-stage1');
+    const taskId = container.dataset.taskId;
+    const currentGroupId = container.dataset.groupId;
+    
+    let url = `/processing/stage1/${taskId}?sort_by=${sortBy}`;
+    if (currentGroupId) {
+        url += `&group_id=${currentGroupId}`;
+    }
+    window.location.href = url;
+}
