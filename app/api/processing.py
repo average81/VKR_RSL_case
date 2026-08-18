@@ -243,16 +243,44 @@ class SavePairRequest(BaseModel):
     next_duplicate_group: Optional[str] = None
 
 
-def get_unduplicated_images_for_task(task_id: int, db: Session) -> List[Image]:
+def get_main_duplicate_image(duplicate_img: Image, db: Session, task_id: int) -> Optional[Image]:
     """
-    Получает список изображений, не находящихся в папке duplicates.
+    Получает главное изображение из группы дубликатов, если текущее изображение является дубликатом.
+    
+    Args:
+        duplicate_img: Изображение-дубликат
+        db: Сессия базы данных
+        task_id: ID задачи
+    
+    Returns:
+        Главное изображение группы или None
+    """
+    if not duplicate_img.duplicate_group:
+        return None
+    
+    main_img = db.query(Image).filter(
+        Image.task_id == task_id,
+        Image.duplicate_group == duplicate_img.duplicate_group,
+        Image.is_main_duplicate == True
+    ).first()
+    return main_img
+
+
+def get_unduplicated_images_pairs_for_task(task_id: int, db: Session, sort_by: str = "order") -> tuple:
+    """
+    Получает пары изображений для валидации уникальных изображений.
     
     Args:
         task_id: ID задачи
         db: Сессия базы данных
+        sort_by: Порядок сортировки ('order' или 'similarity')
+            - 'order': пары в порядке по ID (левое изображение)
+            - 'similarity': пары по убыванию similarity_score правого изображения
     
     Returns:
-        Список изображений, не находящихся в папке duplicates
+        Кортеж (sorted_pairs, natural_pairs_by_id) где:
+        - sorted_pairs: отсортированные пары для отображения
+        - natural_pairs_by_id: словарь {left_image_id: index_in_sorted_pairs}
     """
     # Получаем все изображения задачи
     all_images = db.query(Image).filter(Image.task_id == task_id).all()
@@ -263,14 +291,54 @@ def get_unduplicated_images_for_task(task_id: int, db: Session) -> List[Image]:
         if 'duplicates' not in img.processed_path
     ]
     
-    # Сортируем по ID для последовательной навигации
-    return sorted(unduplicated_images, key=lambda x: x.id)
+    # Сортируем по ID для естественного порядка
+    unduplicated_images = sorted(unduplicated_images, key=lambda x: x.id)
+    
+    # Формируем пары из последовательных изображений в естественном порядке
+    natural_pairs = []
+    i = 0
+    while i + 1 < len(unduplicated_images):
+        left_img = unduplicated_images[i]
+        right_img = unduplicated_images[i + 1]
+        
+        # Если правое изображение является дубликатом, берём similarity_score главного изображения в группе
+        displayed_similarity = right_img.similarity_score
+        if right_img.is_duplicate and right_img.duplicate_group:
+            main_dup_img = get_main_duplicate_image(right_img, db, task_id)
+            if main_dup_img and main_dup_img.similarity_score is not None:
+                displayed_similarity = main_dup_img.similarity_score
+        
+        natural_pairs.append({
+            "left": left_img,
+            "right": right_img,
+            "right_similarity": displayed_similarity if displayed_similarity is not None else 0.0
+        })
+        i += 2
+    
+    if not natural_pairs:
+        return [], {}
+    
+    # Определяем порядок сортировки пар
+    if sort_by == "similarity":
+        # Сортируем пары по убыванию similarity_score правого изображения
+        sorted_pairs = sorted(natural_pairs, key=lambda x: (-(x["right_similarity"] if x["right_similarity"] is not None else 0.0)))
+    else:
+        sorted_pairs = natural_pairs
+    
+    # Создаём маппинг: left_image_id -> индекс в отсортированном списке
+    left_ids_to_index = {}
+    for idx, pair in enumerate(sorted_pairs):
+        left_ids_to_index[pair["left"].id] = idx
+    
+    return sorted_pairs, left_ids_to_index
 
 @router.get("/unduplicates/stage1/{task_id}")
 async def get_processing_unduplicates_stage1(
     request: Request,
     task_id: int,
+    pair_index: int = None,
     image_id: int = None,
+    sort_by: str = Query("order", regex="^(order|similarity)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -280,7 +348,9 @@ async def get_processing_unduplicates_stage1(
     Args:
         request: Объект запроса
         task_id: ID задачи
-        image_id: ID конкретного изображения для отображения
+        pair_index: Индекс пары для отображения (приоритет)
+        image_id: ID конкретного изображения для отображения (fallback)
+        sort_by: Порядок сортировки ('order' или 'similarity')
         db: Сессия базы данных
         current_user: Текущий пользователь
     
@@ -290,36 +360,59 @@ async def get_processing_unduplicates_stage1(
     # Получаем задачу с проверкой доступа и валидацией
     task = get_task_with_review(task_id, db, current_user)
     
-    # Получаем все изображения, не входящие в группы дубликатов
-    unduplicated_images = get_unduplicated_images_for_task(task_id, db)
+    # Получаем пары изображений
+    sorted_pairs, left_ids_to_index = get_unduplicated_images_pairs_for_task(task_id, db, sort_by)
     
-    if not unduplicated_images:
+    if not sorted_pairs:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Изображения, не входящие в группы дубликатов, не найдены для задачи"
+            detail="Пары изображений не найдены для задачи"
         )
     
-    # Определяем текущее изображение
-    image_ids = [img.id for img in unduplicated_images]
-    current_image_idx = 0
+    # Определяем текущую пару
+    current_pair_idx = 0
     
-    # Обработка параметра image_id
-    if image_id is not None:
-        if image_id in image_ids:
-            current_image_idx = image_ids.index(image_id)
+    # Обработка параметра pair_index (приоритет)
+    if pair_index is not None and 0 <= pair_index < len(sorted_pairs):
+        current_pair_idx = pair_index
+    # Обработка параметра image_id (fallback)
+    elif image_id is not None:
+        if image_id in left_ids_to_index:
+            # image_id соответствует левому изображению в паре
+            current_pair_idx = left_ids_to_index[image_id]
         else:
-            # Если изображение с указанным ID не найдено, берем следующее доступное
-            for i, img_id in enumerate(image_ids):
-                if img_id > image_id:
-                    current_image_idx = i
+            # image_id не является левым в паре — ищем пару, где он является правым
+            found = False
+            for idx, pair in enumerate(sorted_pairs):
+                if pair["right"].id == image_id:
+                    # image_id — правый в паре, показываем эту пару (но текущее = левое)
+                    current_pair_idx = idx
+                    found = True
                     break
+            if not found:
+                # image_id больше любого левого — берём следующую пару после найденного
+                for idx, pair in enumerate(sorted_pairs):
+                    if pair["left"].id > image_id:
+                        current_pair_idx = idx
+                        break
+                    elif idx + 1 < len(sorted_pairs) and pair["left"].id < image_id and sorted_pairs[idx + 1]["left"].id > image_id:
+                        current_pair_idx = idx + 1
+                        break
     
-    current_image = unduplicated_images[current_image_idx]
+    # Извлекаем изображения из пары
+    current_pair = sorted_pairs[current_pair_idx]
+    current_image = current_pair["left"]
+    next_image = current_pair["right"]
     
-    # Определяем следующее изображение
-    next_image = None
-    if current_image_idx < len(unduplicated_images) - 1:
-        next_image = unduplicated_images[current_image_idx + 1]
+    # Собираем image_ids для навигации (ID всех изображений в паре)
+    image_ids = []
+    for pair in sorted_pairs:
+        image_ids.append(pair["left"].id)
+        if pair["right"]:
+            image_ids.append(pair["right"].id)
+    
+    # Получаем корректное similarity_score из пары (уже скорректированное для дубликатов)
+    displayed_similarity = current_pair.get("right_similarity", next_image.similarity_score if next_image else None)
     
     # Формируем данные для шаблона
     template_data = {
@@ -330,15 +423,17 @@ async def get_processing_unduplicates_stage1(
             "filename": current_image.filename,
             "processed_path": current_image.processed_path,
         },
-        "next_image":{
+        "next_image": {
             "id": next_image.id,
             "filename": next_image.filename,
             "processed_path": next_image.processed_path,
+            "similarity_score": displayed_similarity
         } if next_image else None,
         "image_ids": image_ids,
+        "sort_by": sort_by,
         "progress": {
-            "current": current_image_idx + 1,
-            "total": len(image_ids)
+            "current": current_pair_idx + 1,
+            "total": len(sorted_pairs)
         }
     }
     

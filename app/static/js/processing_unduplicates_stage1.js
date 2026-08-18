@@ -7,6 +7,9 @@ const ProcessingUnduplicatesStage1 = {
     taskId: null,
     currentImageId: null,
     nextImageId: null,
+    pairCount: 0,
+    currentPairIndex: 0,
+    sortBy: "order",
     
     /**
      * Инициализация страницы обработки
@@ -16,6 +19,9 @@ const ProcessingUnduplicatesStage1 = {
         this.taskId = parseInt(document.getElementById('processing-unduplicates-stage1').dataset.taskId);
         this.currentImageId = document.getElementById('processing-unduplicates-stage1').dataset.currentImageId;
         this.nextImageId = document.getElementById('processing-unduplicates-stage1').dataset.nextImageId;
+        this.pairCount = parseInt(document.getElementById('processing-unduplicates-stage1').dataset.pairCount) || 0;
+        this.currentPairIndex = parseInt(document.getElementById('processing-unduplicates-stage1').dataset.currentPairIndex) || 0;
+        this.sortBy = document.getElementById('processing-unduplicates-stage1').dataset.sortBy || "order";
         
         // Получаем список всех image_id из data-атрибута
         this.imageIds = document.getElementById('processing-unduplicates-stage1').dataset.imageIds
@@ -50,19 +56,17 @@ const ProcessingUnduplicatesStage1 = {
      * @param {string} direction - 'prev' или 'next'
      */
     navigateImage: function(direction) {
-        // Используем предварительно загруженный список imageIds
-        const currentIndex = this.imageIds.indexOf(this.currentImageId);
-        
+        // Используем пары (индексы пар)
         let newIndex;
         if (direction === 'next') {
-            newIndex = Math.min(currentIndex + 1, this.imageIds.length - 1);
+            newIndex = Math.min(this.currentPairIndex + 1, this.pairCount - 1);
         } else if (direction === 'prev') {
-            newIndex = Math.max(currentIndex - 1, 0);
+            newIndex = Math.max(this.currentPairIndex - 1, 0);
         }
         
         // Проверяем, что индекс изменился и находится в допустимом диапазоне
-        if (newIndex !== -1 && newIndex !== currentIndex) {
-            window.location.href = `/processing/unduplicates/stage1/${this.taskId}?image_id=${this.imageIds[newIndex]}`;
+        if (newIndex !== -1 && newIndex !== this.currentPairIndex) {
+            window.location.href = `/processing/unduplicates/stage1/${this.taskId}?pair_index=${newIndex}&sort_by=${this.sortBy}`;
         }
     },
     
@@ -163,3 +167,19 @@ document.addEventListener('DOMContentLoaded', () => {
         ProcessingUnduplicatesStage1.init();
     }
 });
+
+/**
+ * Обработчик изменения сортировки
+ * @param {string} sortBy - 'order' или 'similarity'
+ */
+function changeSortUndup(sortBy) {
+    const container = document.getElementById('processing-unduplicates-stage1');
+    const taskId = container.dataset.taskId;
+    const currentImageId = container.dataset.currentImageId;
+    
+    let url = `/processing/unduplicates/stage1/${taskId}?sort_by=${sortBy}`;
+    if (currentImageId) {
+        url += `&image_id=${currentImageId}`;
+    }
+    window.location.href = url;
+}
