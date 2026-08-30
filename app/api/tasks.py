@@ -340,7 +340,7 @@ async def create_task(
 async def create_task_form(
     request: Request,
     title: str = Form(...),
-    description: str = Form(...),
+    description: str = Form(""),
     input_path: str = Form(...),
     stage: str = Form(...),
     owner_id: int = Form(...),
@@ -857,6 +857,74 @@ async def save_processing_settings(
     
     return {"message": "Настройки успешно сохранены"}
 
+
+
+@router.get("/{task_id}/logs")
+async def get_task_logs(
+    request: Request,
+    task_id: int,
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
+):
+    """
+    Отображение страницы логов обработки задачи
+    """
+    task_service = TaskService(db)
+    task = task_service.get_task_by_id(task_id, current_user)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
+
+    if not check_task_access(request, current_user, task):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещен")
+
+    # Получаем все изображения задачи
+    images = db.query(Image).filter(
+        Image.task_id == task_id
+    ).order_by(Image.id).all()
+
+    # Формируем данные для отображения
+    logs_data = []
+    for img in images:
+        # Форматируем дату и время обработки
+        processed_at = img.updated_at.strftime('%d.%m.%Y %H:%M:%S') if img.updated_at else (img.created_at.strftime('%d.%m.%Y %H:%M:%S') if img.created_at else '-')
+        
+        # Форматируем степень схожести
+        similarity = f"{img.similarity_score:.0%}" if img.similarity_score is not None else '-'
+        
+        # Форматируем статус дубликата (главное изображение группы не считается дубликатом)
+        is_dup = 'Да' if img.is_duplicate and not img.is_main_duplicate else 'Нет'
+        
+        # Форматируем выпуск
+        issue = f"{img.issue_name} - Выпуск {img.issue_number}" if img.issue_name and img.issue_number else '-'
+        
+        # Форматируем статус валидации
+        validation_map = {
+            'pending': 'Ожидание',
+            'user_validated': 'Подтверждено пользователем',
+            'leader_validated': 'Подтверждено начальником',
+            'updated': 'Обновлено'
+        }
+        validation = validation_map.get(img.validation_status, img.validation_status or 'Неизвестно')
+        
+        logs_data.append({
+            'filename': img.filename,
+            'processed_at': processed_at,
+            'similarity_score': similarity,
+            'is_duplicate': is_dup,
+            'issue': issue,
+            'validation_status': validation
+        })
+
+    return templates.TemplateResponse(
+        request=request,
+        name="logs.html",
+        context={
+            "request": request,
+            "current_user": current_user,
+            "task": task,
+            "logs_data": logs_data
+        }
+    )
 
 
 @router.post("/settings")

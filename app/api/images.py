@@ -377,6 +377,11 @@ def start_image_processing(
             "shutdown_event": shutdown_event
         }, daemon=True).start()
     
+    # Обновляем статус задачи на in_progress
+    task.status = "in_progress"
+    db.commit()
+    db.refresh(task)
+    
     # Сохраняем событие остановки для задачи
     if task_id not in ACTIVE_PROCESSES:
         ACTIVE_PROCESSES[task_id] = {}

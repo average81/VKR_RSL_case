@@ -312,7 +312,7 @@ async function deleteTask(taskId) {
 }
 
 async function viewLogs(taskId) {
-    window.open(`/tasks/${taskId}/logs`, '_blank');
+    window.location.href = `/tasks/${taskId}/logs`;
 }
 
 async function downloadResults(taskId) {
