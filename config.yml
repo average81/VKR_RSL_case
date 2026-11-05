@@ -1,7 +1,9 @@
 db_path: processed_images.db
-duplicate_threshold: 0.1
+duplicate_threshold: 0.7
 match_threshold: 0.5
-matcher: BF  # Доступные: BF, FLANN, SM, SMADALAM
-feature_extractor: ORB # Доступные: SIFT, ORB, KAZE, AKAZE
+matcher: SMADALAM  # Доступные: BF, FLANN, SM, SMADALAM
+feature_extractor: DISK # Доступные: SIFT, ORB, KAZE, AKAZE, KORNIA_SIFT, DISK
 quality_method: BRISQUE #BRISQUE
-nfeatures: 25000
+nfeatures: 10000    #Ограничение числа извлекаемых признаков
+kp_type: LAF    #KP_CV,LAF (тип используемых ключевых точек при сопоставлении)
+device: cuda #cuda,cpu

@@ -123,6 +123,7 @@ if __name__ == "__main__":
     matcher = list(matchers.keys())[0]
     extractor = list(extractors.keys())[0]
     quality_method = list(quality_methods.keys())[0]
+
     if "matcher" in config.keys():
         matcher = config["matcher"]
     if "feature_extractor" in config.keys():
@@ -133,8 +134,16 @@ if __name__ == "__main__":
         nfeatures = config["nfeatures"]
     else:
         nfeatures=None
-    Dprocessor = DuplicatesProcessor(extractor,nfeatures,matcher,quality_method)
-    logger.info(f"Using {matcher} matcher and {extractor} extractor with nfeatures={nfeatures}.")
+    if "kp_type" in config.keys():
+        kp_type = config["kp_type"]
+    else:
+        kp_type=None
+    if "device" in config.keys():
+        device = config["device"]
+    else:
+        device="cpu"
+    Dprocessor = DuplicatesProcessor(extractor,nfeatures,matcher,quality_method,kp_type,device)
+    logger.info(f"Using {matcher} matcher and {extractor} extractor with nfeatures={nfeatures}, kp_type={kp_type} and device={Dprocessor.feature_extractor.device}.")
     logger.info(f"Using {quality_method} quality method and match_threshold={config['match_threshold']}.")
     duplicate_series_name = ''
     metrics = pd.DataFrame(columns=['image', 'score'])

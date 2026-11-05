@@ -1,29 +1,30 @@
 # processor/duplicates_processor.py
 
 from processor.feature_extractors import FeatureExtractorSIFT, FeatureExtractorORB, FeatureExtractorKAZE, FeatureExtractorAKAZE, FeatureExtractorDISK
+from processor.feature_extractors import FeatureExtractorKorniaSIFT
 from processor.feature_matchers import BFMatcher, FLANNmatcher,SymmetricMatcher,SymmetricAdalamMatcher
 from processor.quality_processor import QualityProcessor_brisque
 
 
 matchers = {"BF": BFMatcher, "FLANN": FLANNmatcher, "SM": SymmetricMatcher,"SMADALAM":SymmetricAdalamMatcher}
 extractors = {"SIFT": FeatureExtractorSIFT, "ORB": FeatureExtractorORB, "KAZE": FeatureExtractorKAZE,
-              "AKAZE": FeatureExtractorAKAZE,"DISK":FeatureExtractorDISK}
+              "AKAZE": FeatureExtractorAKAZE,"DISK":FeatureExtractorDISK,"KORNIA_SIFT":FeatureExtractorKorniaSIFT}
 quality_methods = {"BRISQUE": QualityProcessor_brisque}
 
 class DuplicatesProcessor:
-    def __init__(self, feature_extractor="SIFT",nfeatures = 20000, matcher_type="BF", quality_method = "BRISQUE"):
+    def __init__(self, feature_extractor="SIFT",nfeatures = 20000, matcher_type="BF", quality_method = "BRISQUE",
+                 kp_type = "KP_CV",device = "cpu"):
         if feature_extractor not in extractors:
             feature_extractor="SIFT"
-            self.feature_extractor = FeatureExtractorSIFT()
+            self.feature_extractor = FeatureExtractorSIFT(nfeatures=nfeatures, kp_type = kp_type, device = device)
         else:
-            if feature_extractor == "DISK":
-                self.feature_extractor = extractors[feature_extractor](matcher = matcher_type)
-            else:
-                self.feature_extractor = extractors[feature_extractor](nfeatures=nfeatures)
+           self.feature_extractor = extractors[feature_extractor](nfeatures=nfeatures, kp_type = kp_type, device = device)
+        self.kp_type = kp_type
+        self.device = device
         if matcher_type not in matchers:
-            self.matcher = BFMatcher(feature_extractor)
+            self.matcher = BFMatcher(feature_extractor, kp_type=kp_type)
         else:
-            self.matcher = matchers[matcher_type](feature_extractor)
+            self.matcher = matchers[matcher_type](feature_extractor, kp_type=kp_type, device=device)
         self.last_kp = None
         self.last_features = None
         self.nfeatures = nfeatures
